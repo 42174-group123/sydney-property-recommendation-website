@@ -163,12 +163,15 @@ function Index() {
       if (!filters) {
         return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
       }
+      if (!isAuthenticated || !user?.id) {
+        return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } });
+      }
       if (import.meta.env.VITE_ML_BACKEND_URL || import.meta.env.PROD) {
         return rankListingsFromBrowser({
           filters,
           offset: pageParam,
           limit: PAGE_SIZE,
-          userId: user?.id,
+          userId: user.id,
         });
       }
       return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } });
