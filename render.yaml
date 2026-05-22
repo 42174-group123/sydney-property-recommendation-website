@@ -83,8 +83,6 @@ services:
         sync: false
       - key: CLEARML_API_SECRET_KEY
         sync: false
-      - key: CLEARML_OUTPUT_URI
-        sync: false
       - key: CLEARML_PROJECT_DATA
         value: Stay Scout MLOps/Data Snapshots
       - key: CLEARML_PROJECT_REVIEW
