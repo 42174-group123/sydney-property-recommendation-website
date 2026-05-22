@@ -10,6 +10,9 @@ const listingIdSchema = z
   .union([z.string().trim().regex(/^\d+$/), z.number().int().nonnegative()])
   .transform((value) => String(value));
 
+const listingIdFilter = (id: ListingId) => id as unknown as number;
+const listingIdFilterArray = (ids: ListingId[]) => ids as unknown as readonly number[];
+
 function getServerClient() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -215,7 +218,7 @@ export const getListing = createServerFn({ method: "GET" })
       .select(
         "id, name, picture_url, host_picture_url, price, neighbourhood_cleansed, beds, bathrooms, host_is_superhost, host_since, description, neighborhood_overview, amenities, latitude, longitude",
       )
-      .eq("id", data.id)
+      .eq("id", listingIdFilter(data.id))
       .maybeSingle();
     if (error) throw new Error(error.message);
     return row as unknown as ListingDetail | null;
@@ -377,7 +380,7 @@ export const getSavedListings = createServerFn({ method: "GET" })
     const { data: rows, error } = await getServerClient()
       .from("listings")
       .select("id, name, picture_url, host_picture_url, price")
-      .in("id", ids);
+      .in("id", listingIdFilterArray(ids));
     if (error) throw new Error(error.message);
     return { items: (rows ?? []).map(toListingCard) };
   });
@@ -510,7 +513,7 @@ export const getPublishedListings = createServerFn({ method: "GET" })
     const { data: rows, error } = await getServerClient()
       .from("listings")
       .select("id, name, picture_url, host_picture_url, price")
-      .in("id", ids);
+      .in("id", listingIdFilterArray(ids));
     if (error) throw new Error(error.message);
     return { items: (rows ?? []).map(toListingCard) };
   });
@@ -535,7 +538,7 @@ export const deleteMyListing = createServerFn({ method: "POST" })
     const { data: deleted, error: delErr } = await supabase
       .from("listings")
       .delete()
-      .eq("id", listingId)
+      .eq("id", listingIdFilter(listingId))
       .select("id");
     if (delErr) throw new Error(delErr.message);
     if (!deleted || deleted.length === 0) {
