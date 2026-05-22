@@ -11,7 +11,7 @@ From the frontend folder, install Nitro once so `package-lock.json` is updated b
 
 ```bash
 cd "/Users/ryanluo/Documents/ai project/stay-scout"
-npm install nitro
+npm install --save-dev nitro@3.0.260429-beta
 ```
 
 Then run:
