@@ -7,7 +7,6 @@ import {
   listListings,
   getMyHost,
   logUserAction,
-  searchListings,
   type ListingCard as ListingCardType,
 } from "@/lib/listings.functions";
 import { RotatingPrompt } from "@/components/RotatingPrompt";
@@ -82,6 +81,7 @@ async function rankListingsFromBrowser({
   limit: number;
   userId?: string | null;
 }): Promise<{ items: ListingCardType[]; nextOffset: number }> {
+  if (!userId) throw new Error("Login is required for ML match scoring");
   const baseUrl = import.meta.env.VITE_ML_BACKEND_URL || DEFAULT_ML_BACKEND_URL;
 
   const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}/rank-listings`, {
@@ -126,14 +126,13 @@ async function rankListingsFromBrowser({
 
 function Index() {
   const navigate = useNavigate();
-  const { isAuthenticated, user, signOut } = useAuth();
+  const { isAuthenticated, loading: authLoading, user, signOut } = useAuth();
   const [gateOpen, setGateOpen] = useState(false);
   const [hostOpen, setHostOpen] = useState(false);
   const queryClient = useQueryClient();
   const fetchListings = useServerFn(listListings);
   const fetchMyHost = useServerFn(getMyHost);
   const recordUserAction = useServerFn(logUserAction);
-  const fetchFiltered = useServerFn(searchListings);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFiltersState] = useState<Filters | null>(() => readStoredFilters());
 
@@ -142,12 +141,22 @@ function Index() {
     writeStoredFilters(next);
   };
 
+  const requireLogin = () => {
+    setGateOpen(true);
+  };
+
   const hostQuery = useQuery({
     queryKey: ["myHost"],
     queryFn: () => fetchMyHost({}),
     enabled: isAuthenticated,
   });
   const needsTravelType = isAuthenticated && hostQuery.data != null && !hostQuery.data.user_type;
+
+  useEffect(() => {
+    if (authLoading || isAuthenticated || filters === null) return;
+    setFiltersState(null);
+    writeStoredFilters(null);
+  }, [authLoading, filters, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -164,17 +173,14 @@ function Index() {
         return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
       }
       if (!isAuthenticated || !user?.id) {
-        return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } });
+        return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
       }
-      if (import.meta.env.VITE_ML_BACKEND_URL || import.meta.env.PROD) {
-        return rankListingsFromBrowser({
-          filters,
-          offset: pageParam,
-          limit: PAGE_SIZE,
-          userId: user.id,
-        });
-      }
-      return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } });
+      return rankListingsFromBrowser({
+        filters,
+        offset: pageParam,
+        limit: PAGE_SIZE,
+        userId: user.id,
+      });
     },
     initialPageParam: 0,
     getNextPageParam: (last) => (last.items.length < PAGE_SIZE ? undefined : last.nextOffset),
@@ -241,7 +247,13 @@ function Index() {
               </button>
             </div>
             <button
-              onClick={() => setHostOpen(true)}
+              onClick={() => {
+                if (!isAuthenticated) {
+                  requireLogin();
+                  return;
+                }
+                setHostOpen(true);
+              }}
               className="rounded-md border-2 border-muted-foreground/30 bg-card px-4 py-2.5 text-sm font-bold shadow-sm hover:bg-muted bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 to-purple-500 bg-clip-text text-transparent"
             >
               Become a host!
@@ -263,12 +275,20 @@ function Index() {
           tabIndex={filtersOpen ? -1 : 0}
           onClick={() => {
             if (filtersOpen) return;
+            if (!isAuthenticated) {
+              requireLogin();
+              return;
+            }
             setFiltersOpen(true);
           }}
           onKeyDown={(e) => {
             if (filtersOpen) return;
             if (e.key !== "Enter" && e.key !== " ") return;
             e.preventDefault();
+            if (!isAuthenticated) {
+              requireLogin();
+              return;
+            }
             setFiltersOpen(true);
           }}
           aria-expanded={filtersOpen}
@@ -300,6 +320,12 @@ function Index() {
               <FilterPanel
                 initialFilters={filters}
                 onApply={(f) => {
+                  if (!isAuthenticated) {
+                    setFiltersOpen(false);
+                    setActiveFilters(null);
+                    requireLogin();
+                    return;
+                  }
                   const next = hasAnyFilter(f) ? f : null;
                   setActiveFilters(next);
                   setFiltersOpen(false);

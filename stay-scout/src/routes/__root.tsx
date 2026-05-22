@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 import {
   Outlet,
   Link,
@@ -121,11 +122,51 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+
+function RemoveLovableBadge() {
+  useEffect(() => {
+    const removeBadges = () => {
+      const candidates = document.querySelectorAll<HTMLElement>(
+        'a, button, div, iframe, [class*="lovable" i], [id*="lovable" i], [href*="lovable" i]',
+      );
+      candidates.forEach((node) => {
+        const text = node.textContent?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
+        const src = node instanceof HTMLIFrameElement ? node.src.toLowerCase() : "";
+        const href = node instanceof HTMLAnchorElement ? node.href.toLowerCase() : "";
+        const className = String(node.getAttribute("class") ?? "").toLowerCase();
+        const id = String(node.id ?? "").toLowerCase();
+        const isLovableTextBadge = text.includes("edit with lovable") && text.length <= 80;
+        if (
+          isLovableTextBadge ||
+          src.includes("lovable") ||
+          href.includes("lovable") ||
+          className.includes("lovable") ||
+          id.includes("lovable")
+        ) {
+          node.remove();
+        }
+      });
+    };
+
+    removeBadges();
+    const observer = new MutationObserver(removeBadges);
+    observer.observe(document.body, { childList: true, subtree: true });
+    const timer = window.setInterval(removeBadges, 1000);
+    return () => {
+      observer.disconnect();
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <RemoveLovableBadge />
       <Outlet />
     </QueryClientProvider>
   );
