@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listListings,
   getMyHost,
@@ -135,15 +135,69 @@ function Index() {
   const recordUserAction = useServerFn(logUserAction);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFiltersState] = useState<Filters | null>(() => readStoredFilters());
+  const [rankedPages, setRankedPages] = useState<
+    Array<{ items: ListingCardType[]; nextOffset: number }>
+  >([]);
+  const [rankedLoading, setRankedLoading] = useState(false);
+  const [rankedHasMore, setRankedHasMore] = useState(false);
+  const [rankedNextOffset, setRankedNextOffset] = useState(0);
+  const [rankingError, setRankingError] = useState<string | null>(null);
 
   const setActiveFilters = (next: Filters | null) => {
     setFiltersState(next);
     writeStoredFilters(next);
   };
 
-  const requireLogin = () => {
+  const requireLogin = useCallback(() => {
     setGateOpen(true);
-  };
+  }, []);
+
+  const resolveUserId = useCallback(async () => {
+    if (user?.id) return user.id;
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user.id ?? null;
+  }, [user?.id]);
+
+  const loadRankedListings = useCallback(
+    async (activeFilters: Filters, offset: number, replace: boolean) => {
+      setRankedLoading(true);
+      setRankingError(null);
+      if (replace) {
+        setRankedPages([]);
+        setRankedHasMore(false);
+        setRankedNextOffset(0);
+      }
+
+      const userId = await resolveUserId();
+      if (!userId) {
+        setRankedPages([]);
+        setRankedHasMore(false);
+        setRankedNextOffset(0);
+        setRankedLoading(false);
+        requireLogin();
+        return;
+      }
+
+      try {
+        const page = await rankListingsFromBrowser({
+          filters: activeFilters,
+          offset,
+          limit: PAGE_SIZE,
+          userId,
+        });
+        setRankedPages((prev) => (replace ? [page] : [...prev, page]));
+        setRankedNextOffset(page.nextOffset);
+        setRankedHasMore(page.items.length === PAGE_SIZE);
+      } catch (error) {
+        setRankingError(error instanceof Error ? error.message : "ML ranking request failed");
+        setRankedHasMore(false);
+        if (replace) setRankedPages([]);
+      } finally {
+        setRankedLoading(false);
+      }
+    },
+    [requireLogin, resolveUserId],
+  );
 
   const hostQuery = useQuery({
     queryKey: ["myHost"],
@@ -161,24 +215,25 @@ function Index() {
   }, [isAuthenticated, hostQuery]);
 
   const query = useInfiniteQuery({
-    queryKey: ["listings", filters, user?.id ?? null],
-    queryFn: ({ pageParam }) => {
-      if (!filters) {
-        return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
-      }
-      if (!user?.id) {
-        return { items: [] as ListingCardType[], nextOffset: pageParam };
-      }
-      return rankListingsFromBrowser({
-        filters,
-        offset: pageParam,
-        limit: PAGE_SIZE,
-        userId: user.id,
-      });
-    },
+    queryKey: ["listings"],
+    queryFn: ({ pageParam }) =>
+      fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } }),
     initialPageParam: 0,
+    enabled: filters === null,
     getNextPageParam: (last) => (last.items.length < PAGE_SIZE ? undefined : last.nextOffset),
   });
+
+  useEffect(() => {
+    if (!filters) {
+      setRankedPages([]);
+      setRankedHasMore(false);
+      setRankedNextOffset(0);
+      setRankingError(null);
+      return;
+    }
+    if (!isAuthenticated || rankedLoading || rankedPages.length > 0) return;
+    void loadRankedListings(filters, 0, true);
+  }, [filters, isAuthenticated, loadRankedListings, rankedLoading, rankedPages.length]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -188,18 +243,35 @@ function Index() {
     const obs = new IntersectionObserver(
       (entries) => {
         if (!entries[0].isIntersecting) return;
+        if (filters) {
+          if (!rankedHasMore || rankedLoading) return;
+          if (!isAuthenticated) {
+            setGateOpen(true);
+            return;
+          }
+          void loadRankedListings(filters, rankedNextOffset, false);
+          return;
+        }
         if (!query.hasNextPage || query.isFetchingNextPage) return;
         if (!isAuthenticated) {
           setGateOpen(true);
           return;
         }
-        query.fetchNextPage();
+        void query.fetchNextPage();
       },
       { rootMargin: "200px" },
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [isAuthenticated, query]);
+  }, [
+    filters,
+    isAuthenticated,
+    loadRankedListings,
+    query,
+    rankedHasMore,
+    rankedLoading,
+    rankedNextOffset,
+  ]);
 
   const handleCardClick = async (id: string) => {
     if (!isAuthenticated) {
@@ -224,7 +296,11 @@ function Index() {
     });
   };
 
-  const items = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const items = filters
+    ? rankedPages.flatMap((p) => p.items)
+    : (query.data?.pages.flatMap((p) => p.items) ?? []);
+  const isListLoading = filters ? rankedLoading : query.isLoading;
+  const hasMoreListings = filters ? rankedHasMore : query.hasNextPage;
 
   return (
     <div className="min-h-screen bg-secondary">
@@ -321,8 +397,15 @@ function Index() {
                     return;
                   }
                   const next = hasAnyFilter(f) ? f : null;
-                  setActiveFilters(next);
                   setFiltersOpen(false);
+                  setActiveFilters(next);
+                  if (next) {
+                    setRankedPages([]);
+                    setRankedHasMore(false);
+                    setRankedNextOffset(0);
+                    setRankingError(null);
+                    void loadRankedListings(next, 0, true);
+                  }
                 }}
                 onClose={() => setFiltersOpen(false)}
               />
@@ -338,11 +421,15 @@ function Index() {
           ))}
         </div>
 
-        {query.isLoading ? (
+        {isListLoading ? (
           <p className="mt-10 text-center text-sm text-muted-foreground">Loading…</p>
         ) : null}
 
-        {query.hasNextPage ? (
+        {rankingError ? (
+          <p className="mt-10 text-center text-sm text-destructive">{rankingError}</p>
+        ) : null}
+
+        {hasMoreListings ? (
           <div ref={sentinelRef} className="h-16" />
         ) : (
           <p className="mt-10 text-center text-sm text-muted-foreground">You've reached the end.</p>

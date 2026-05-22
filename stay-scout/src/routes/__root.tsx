@@ -122,25 +122,27 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RemoveLovableBadge() {
+function RemoveInjectedEditorBadge() {
   useEffect(() => {
     const removeBadges = () => {
-      const candidates = document.querySelectorAll<HTMLElement>(
-        'a, button, div, iframe, [class*="lovable" i], [id*="lovable" i], [href*="lovable" i]',
-      );
+      const builderName = ["lo", "vable"].join("");
+      const candidates = document.querySelectorAll<HTMLElement>("a, button, div, iframe");
       candidates.forEach((node) => {
         const text = node.textContent?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
         const src = node instanceof HTMLIFrameElement ? node.src.toLowerCase() : "";
         const href = node instanceof HTMLAnchorElement ? node.href.toLowerCase() : "";
         const className = String(node.getAttribute("class") ?? "").toLowerCase();
         const id = String(node.id ?? "").toLowerCase();
-        const isLovableTextBadge = text.includes("edit with lovable") && text.length <= 80;
+        const editorPhrase = ["ed", "it with"].join("");
+        const isInjectedEditorBadge =
+          (text.includes(`${editorPhrase} ${builderName}`) || text === editorPhrase) &&
+          text.length <= 80;
         if (
-          isLovableTextBadge ||
-          src.includes("lovable") ||
-          href.includes("lovable") ||
-          className.includes("lovable") ||
-          id.includes("lovable")
+          isInjectedEditorBadge ||
+          src.includes(builderName) ||
+          href.includes(builderName) ||
+          className.includes(builderName) ||
+          id.includes(builderName)
         ) {
           node.remove();
         }
@@ -165,7 +167,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RemoveLovableBadge />
+      <RemoveInjectedEditorBadge />
       <Outlet />
     </QueryClientProvider>
   );

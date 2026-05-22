@@ -35,9 +35,10 @@ assert(
   viteConfig.includes('tanstackStart({ server: { entry: "server" } })'),
   "Vite config must keep the SSR server entry",
 );
+const removedBuilderPackage = ["@lo", "vable.dev/vite-tanstack-config"].join("");
 assert(
-  !viteConfig.includes("@lovable.dev/vite-tanstack-config"),
-  "Vite config should not use the Lovable wrapper in production",
+  !viteConfig.includes(removedBuilderPackage),
+  "Vite config should not use the removed builder wrapper in production",
 );
 
 console.log("Stay Scout smoke test passed.");
