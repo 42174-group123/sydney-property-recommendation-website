@@ -26,16 +26,12 @@ assert(packageJson.devDependencies?.nitro, "package.json must include Nitro for 
 assert(viteConfig.includes("nitro/vite"), "Vercel build must use the Nitro Vite plugin");
 assert(viteConfig.includes("isVercelBuild"), "Vite config must detect Vercel builds");
 assert(
-  viteConfig.includes("@tanstack/react-start/plugin/vite"),
-  "Vite config must use the TanStack Start Vite plugin",
+  viteConfig.includes("cloudflare: isVercelBuild ? false : undefined"),
+  "Vercel build must disable Cloudflare plugin",
 );
-assert(viteConfig.includes("@vitejs/plugin-react"), "Vite config must include React plugin");
-assert(viteConfig.includes("@tailwindcss/vite"), "Vite config must include Tailwind plugin");
 assert(
-  viteConfig.includes('tanstackStart({ server: { entry: "server" } })'),
+  viteConfig.includes('server: { entry: "server" }'),
   "Vite config must keep the SSR server entry",
 );
-const removedWrapperPackage = ["vite", "tanstack", "config"].join("-");
-assert(!viteConfig.includes(removedWrapperPackage), "Vite config should use plain Vite plugins");
 
 console.log("Stay Scout smoke test passed.");

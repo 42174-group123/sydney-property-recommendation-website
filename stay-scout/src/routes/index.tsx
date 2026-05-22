@@ -2,12 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   listListings,
-  searchListings,
   getMyHost,
   logUserAction,
+  searchListings,
   type ListingCard as ListingCardType,
 } from "@/lib/listings.functions";
 import { RotatingPrompt } from "@/components/RotatingPrompt";
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/")({
 });
 
 const PAGE_SIZE = 20;
+const DEFAULT_ML_BACKEND_URL = "https://stay-scout-ml-backend.onrender.com";
 const FILTER_STORAGE_KEY = "stay-scout.activeFilters";
 
 function hasAnyFilter(filters: Filters): boolean {
@@ -70,12 +71,49 @@ function writeStoredFilters(filters: Filters | null) {
   window.sessionStorage.removeItem(FILTER_STORAGE_KEY);
 }
 
-function normalizeRankedPage(page: {
-  items?: Array<ListingCardType & { id: unknown }>;
-  nextOffset?: number;
-  offset?: number;
-}): { items: ListingCardType[]; nextOffset: number } {
-  const items = (page.items ?? []).map((item) => ({ ...item, id: String(item.id) }));
+async function rankListingsFromBrowser({
+  filters,
+  offset,
+  limit,
+  userId,
+}: {
+  filters: Filters;
+  offset: number;
+  limit: number;
+  userId?: string | null;
+}): Promise<{ items: ListingCardType[]; nextOffset: number }> {
+  const baseUrl = import.meta.env.VITE_ML_BACKEND_URL || DEFAULT_ML_BACKEND_URL;
+
+  const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}/rank-listings`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId ?? null,
+      offset,
+      limit,
+      filters: {
+        min_accommodates: filters.min_accommodates,
+        min_bathrooms: filters.min_bathrooms,
+        min_bedrooms: filters.min_bedrooms,
+        min_beds: filters.min_beds,
+        min_price: filters.min_price,
+        max_price: filters.max_price,
+        min_nights: filters.min_nights,
+        instant_bookable: filters.instant_bookable,
+        neighbourhood: filters.neighbourhood,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`ML ranking backend returned ${response.status}: ${await response.text()}`);
+  }
+
+  const payload = (await response.json()) as {
+    items?: Array<ListingCardType & { id: unknown }>;
+    nextOffset?: number;
+  };
+  const items = (payload.items ?? []).map((item) => ({ ...item, id: String(item.id) }));
   const unscored = items.filter(
     (item) => typeof item.match_score !== "number" || !Number.isFinite(item.match_score),
   );
@@ -83,131 +121,26 @@ function normalizeRankedPage(page: {
     throw new Error(`ML ranking backend returned ${unscored.length} unscored listings`);
   }
 
-  return { items, nextOffset: page.nextOffset ?? (page.offset ?? 0) + items.length };
-}
-
-async function rankListingsThroughServer({
-  fetchRankedListings,
-  filters,
-  offset,
-  limit,
-  userId,
-}: {
-  fetchRankedListings: ReturnType<typeof useServerFn<typeof searchListings>>;
-  filters: Filters;
-  offset: number;
-  limit: number;
-  userId: string;
-}): Promise<{ items: ListingCardType[]; nextOffset: number }> {
-  console.info("[Stay Scout] Server ranking request", {
-    userId,
-    offset,
-    limit,
-    filters,
-  });
-
-  const payload = await fetchRankedListings({
-    data: {
-      user_id: userId,
-      offset,
-      limit,
-      listing_ids: null,
-      min_accommodates: filters.min_accommodates,
-      min_bathrooms: filters.min_bathrooms,
-      min_bedrooms: filters.min_bedrooms,
-      min_beds: filters.min_beds,
-      min_price: filters.min_price,
-      max_price: filters.max_price,
-      min_nights: filters.min_nights,
-      instant_bookable: filters.instant_bookable,
-      neighbourhood: filters.neighbourhood,
-    },
-  });
-
-  console.info("[Stay Scout] Server ranking response", {
-    itemCount: payload.items?.length ?? 0,
-    nextOffset: payload.nextOffset,
-  });
-  return normalizeRankedPage({ ...payload, offset });
+  return { items, nextOffset: payload.nextOffset ?? offset + items.length };
 }
 
 function Index() {
   const navigate = useNavigate();
-  const { isAuthenticated, user, signOut, loading: authLoading } = useAuth();
+  const { isAuthenticated, user, signOut } = useAuth();
   const [gateOpen, setGateOpen] = useState(false);
   const [hostOpen, setHostOpen] = useState(false);
   const queryClient = useQueryClient();
   const fetchListings = useServerFn(listListings);
-  const fetchRankedListings = useServerFn(searchListings);
   const fetchMyHost = useServerFn(getMyHost);
   const recordUserAction = useServerFn(logUserAction);
+  const fetchFiltered = useServerFn(searchListings);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFiltersState] = useState<Filters | null>(() => readStoredFilters());
-  const [rankedPages, setRankedPages] = useState<
-    Array<{ items: ListingCardType[]; nextOffset: number }>
-  >([]);
-  const [rankedLoading, setRankedLoading] = useState(false);
-  const [rankedHasMore, setRankedHasMore] = useState(false);
-  const [rankedNextOffset, setRankedNextOffset] = useState(0);
-  const [rankingError, setRankingError] = useState<string | null>(null);
 
-  const setActiveFilters = useCallback((next: Filters | null) => {
+  const setActiveFilters = (next: Filters | null) => {
     setFiltersState(next);
     writeStoredFilters(next);
-  }, []);
-
-  const requireLogin = useCallback(() => {
-    setGateOpen(true);
-  }, []);
-
-  const resolveUserId = useCallback(async () => {
-    if (user?.id) return user.id;
-    const { data } = await supabase.auth.getSession();
-    return data.session?.user.id ?? null;
-  }, [user?.id]);
-
-  const loadRankedListings = useCallback(
-    async (activeFilters: Filters, offset: number, replace: boolean) => {
-      setRankedLoading(true);
-      setRankingError(null);
-      if (replace) {
-        setRankedPages([]);
-        setRankedHasMore(false);
-        setRankedNextOffset(0);
-      }
-
-      const userId = await resolveUserId();
-      if (!userId) {
-        setRankedPages([]);
-        setRankedHasMore(false);
-        setRankedNextOffset(0);
-        setRankedLoading(false);
-        requireLogin();
-        return;
-      }
-
-      try {
-        const page = await rankListingsThroughServer({
-          fetchRankedListings,
-          filters: activeFilters,
-          offset,
-          limit: PAGE_SIZE,
-          userId,
-        });
-        setRankedPages((prev) => (replace ? [page] : [...prev, page]));
-        setRankedNextOffset(page.nextOffset);
-        setRankedHasMore(page.items.length === PAGE_SIZE);
-      } catch (error) {
-        console.error("ML ranking request failed; no unranked fallback will be shown.", error);
-        setRankingError(error instanceof Error ? error.message : "ML ranking request failed");
-        setRankedHasMore(false);
-        if (replace) setRankedPages([]);
-      } finally {
-        setRankedLoading(false);
-      }
-    },
-    [fetchRankedListings, requireLogin, resolveUserId],
-  );
+  };
 
   const hostQuery = useQuery({
     queryKey: ["myHost"],
@@ -224,42 +157,25 @@ function Index() {
     return () => clearTimeout(t);
   }, [isAuthenticated, hostQuery]);
 
-  useEffect(() => {
-    if (authLoading || isAuthenticated || !filters) return;
-    setActiveFilters(null);
-    setRankedPages([]);
-    setRankedHasMore(false);
-    setRankedNextOffset(0);
-    setRankedLoading(false);
-    setRankingError(null);
-  }, [authLoading, filters, isAuthenticated, setActiveFilters]);
-
   const query = useInfiniteQuery({
-    queryKey: ["listings"],
-    queryFn: ({ pageParam }) => fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } }),
+    queryKey: ["listings", filters, user?.id ?? null],
+    queryFn: ({ pageParam }) => {
+      if (!filters) {
+        return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
+      }
+      if (import.meta.env.VITE_ML_BACKEND_URL || import.meta.env.PROD) {
+        return rankListingsFromBrowser({
+          filters,
+          offset: pageParam,
+          limit: PAGE_SIZE,
+          userId: user?.id,
+        });
+      }
+      return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } });
+    },
     initialPageParam: 0,
-    enabled: filters === null,
     getNextPageParam: (last) => (last.items.length < PAGE_SIZE ? undefined : last.nextOffset),
   });
-
-  useEffect(() => {
-    if (!filters) {
-      setRankedPages([]);
-      setRankedHasMore(false);
-      setRankedNextOffset(0);
-      setRankingError(null);
-      return;
-    }
-    if (authLoading || !isAuthenticated || rankedLoading || rankedPages.length > 0) return;
-    void loadRankedListings(filters, 0, true);
-  }, [
-    authLoading,
-    filters,
-    isAuthenticated,
-    loadRankedListings,
-    rankedLoading,
-    rankedPages.length,
-  ]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -269,35 +185,18 @@ function Index() {
     const obs = new IntersectionObserver(
       (entries) => {
         if (!entries[0].isIntersecting) return;
-        if (filters) {
-          if (!rankedHasMore || rankedLoading) return;
-          if (!isAuthenticated) {
-            setGateOpen(true);
-            return;
-          }
-          void loadRankedListings(filters, rankedNextOffset, false);
-          return;
-        }
         if (!query.hasNextPage || query.isFetchingNextPage) return;
         if (!isAuthenticated) {
           setGateOpen(true);
           return;
         }
-        void query.fetchNextPage();
+        query.fetchNextPage();
       },
       { rootMargin: "200px" },
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [
-    filters,
-    isAuthenticated,
-    loadRankedListings,
-    query,
-    rankedHasMore,
-    rankedLoading,
-    rankedNextOffset,
-  ]);
+  }, [isAuthenticated, query]);
 
   const handleCardClick = async (id: string) => {
     if (!isAuthenticated) {
@@ -322,17 +221,7 @@ function Index() {
     });
   };
 
-  const filteredSearchActive = filters !== null;
-  const filteredSearchWaiting =
-    filteredSearchActive && !rankingError && (rankedLoading || rankedPages.length === 0);
-  const items = filters
-    ? rankedPages.flatMap((p) => p.items)
-    : (query.data?.pages.flatMap((p) => p.items) ?? []);
-  const isListLoading = filters ? filteredSearchWaiting : query.isLoading;
-  const hasMoreListings = filters ? rankedHasMore : query.hasNextPage;
-  const showEndMessage = filters
-    ? !filteredSearchWaiting && !rankingError && !hasMoreListings
-    : !query.isLoading && !hasMoreListings;
+  const items = query.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
     <div className="min-h-screen bg-secondary">
@@ -349,13 +238,7 @@ function Index() {
               </button>
             </div>
             <button
-              onClick={() => {
-                if (!isAuthenticated) {
-                  requireLogin();
-                  return;
-                }
-                setHostOpen(true);
-              }}
+              onClick={() => setHostOpen(true)}
               className="rounded-md border-2 border-muted-foreground/30 bg-card px-4 py-2.5 text-sm font-bold shadow-sm hover:bg-muted bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 to-purple-500 bg-clip-text text-transparent"
             >
               Become a host!
@@ -377,20 +260,12 @@ function Index() {
           tabIndex={filtersOpen ? -1 : 0}
           onClick={() => {
             if (filtersOpen) return;
-            if (!isAuthenticated) {
-              requireLogin();
-              return;
-            }
             setFiltersOpen(true);
           }}
           onKeyDown={(e) => {
             if (filtersOpen) return;
             if (e.key !== "Enter" && e.key !== " ") return;
             e.preventDefault();
-            if (!isAuthenticated) {
-              requireLogin();
-              return;
-            }
             setFiltersOpen(true);
           }}
           aria-expanded={filtersOpen}
@@ -421,30 +296,10 @@ function Index() {
             >
               <FilterPanel
                 initialFilters={filters}
-                onApply={(f, action = "apply") => {
-                  if (!isAuthenticated) {
-                    setFiltersOpen(false);
-                    setActiveFilters(null);
-                    requireLogin();
-                    return;
-                  }
-                  setFiltersOpen(false);
-                  if (action === "reset") {
-                    setActiveFilters(null);
-                    setRankedPages([]);
-                    setRankedHasMore(false);
-                    setRankedNextOffset(0);
-                    setRankingError(null);
-                    setRankedLoading(false);
-                    return;
-                  }
-                  const next = f;
+                onApply={(f) => {
+                  const next = hasAnyFilter(f) ? f : null;
                   setActiveFilters(next);
-                  setRankedPages([]);
-                  setRankedHasMore(false);
-                  setRankedNextOffset(0);
-                  setRankingError(null);
-                  void loadRankedListings(next, 0, true);
+                  setFiltersOpen(false);
                 }}
                 onClose={() => setFiltersOpen(false)}
               />
@@ -460,19 +315,15 @@ function Index() {
           ))}
         </div>
 
-        {isListLoading ? (
+        {query.isLoading ? (
           <p className="mt-10 text-center text-sm text-muted-foreground">Loading…</p>
         ) : null}
 
-        {rankingError ? (
-          <p className="mt-10 text-center text-sm text-destructive">{rankingError}</p>
-        ) : null}
-
-        {hasMoreListings ? (
+        {query.hasNextPage ? (
           <div ref={sentinelRef} className="h-16" />
-        ) : showEndMessage ? (
+        ) : (
           <p className="mt-10 text-center text-sm text-muted-foreground">You've reached the end.</p>
-        ) : null}
+        )}
       </main>
 
       <LoginGateModal open={gateOpen} onClose={() => setGateOpen(false)} />

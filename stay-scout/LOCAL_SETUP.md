@@ -2,7 +2,7 @@
 
 ## Current local app
 
-The project is unpacked in this folder and dependencies are installed with npm. The exported `.env` currently points at the hosted Supabase project, so the fastest local loop is:
+The project is unpacked in this folder and dependencies are installed with npm. The exported `.env` currently points at the hosted Supabase project from Lovable, so the fastest local loop is:
 
 ```sh
 npm run dev -- --host 127.0.0.1

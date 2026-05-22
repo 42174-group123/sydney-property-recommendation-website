@@ -81,7 +81,7 @@ export function FilterPanel({
   onClose,
 }: {
   initialFilters?: Filters | null;
-  onApply: (f: Filters, action?: "apply" | "reset") => void;
+  onApply: (f: Filters) => void;
   onClose?: () => void;
 }) {
   const [accommodates, setAccommodates] = useState("");
@@ -146,20 +146,17 @@ export function FilterPanel({
       neighbourhoodValue = match;
     }
     setErr(null);
-    onApply(
-      {
-        min_accommodates: toNum(accommodates),
-        min_bathrooms: toNum(bathrooms),
-        min_bedrooms: toNum(bedrooms),
-        min_beds: toNum(beds),
-        min_price: toNum(minPrice),
-        max_price: toNum(maxPrice),
-        min_nights: toNum(minNights),
-        instant_bookable: instant ? true : null,
-        neighbourhood: neighbourhoodValue,
-      },
-      "apply",
-    );
+    onApply({
+      min_accommodates: toNum(accommodates),
+      min_bathrooms: toNum(bathrooms),
+      min_bedrooms: toNum(bedrooms),
+      min_beds: toNum(beds),
+      min_price: toNum(minPrice),
+      max_price: toNum(maxPrice),
+      min_nights: toNum(minNights),
+      instant_bookable: instant ? true : null,
+      neighbourhood: neighbourhoodValue,
+    });
   };
 
   const handleReset = () => {
@@ -174,7 +171,7 @@ export function FilterPanel({
     setNeighbourhood("");
     setErr(null);
     setNeighbourhoodErr(null);
-    onApply(EMPTY, "reset");
+    onApply(EMPTY);
   };
 
   const fieldCls =

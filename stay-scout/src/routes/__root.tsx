@@ -1,5 +1,4 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect } from "react";
 import {
   Outlet,
   Link,
@@ -73,26 +72,37 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Stay Scout" },
+      { title: "Lovable App" },
       {
         name: "description",
         content:
-          "Stay Scout helps travellers find Sydney properties with intelligent filtering and personalised recommendations.",
+          "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information.",
       },
-      { name: "author", content: "Stay Scout" },
-      { property: "og:title", content: "Stay Scout" },
+      { name: "author", content: "Lovable" },
+      { property: "og:title", content: "Lovable App" },
       {
         property: "og:description",
         content:
-          "Find Sydney properties with intelligent filtering and personalised recommendations.",
+          "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Stay Scout" },
+      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Lovable App" },
       {
         name: "twitter:description",
         content:
-          "Find Sydney properties with intelligent filtering and personalised recommendations.",
+          "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/29e763d3-7347-4b0d-b645-dbc23dbfda94/id-preview-c796fddf--e2d604c7-c38a-4d92-ba0c-4b823e503a4f.lovable.app-1779282990590.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/29e763d3-7347-4b0d-b645-dbc23dbfda94/id-preview-c796fddf--e2d604c7-c38a-4d92-ba0c-4b823e503a4f.lovable.app-1779282990590.png",
       },
     ],
     links: [
@@ -122,52 +132,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RemoveInjectedFloatingBadge() {
-  useEffect(() => {
-    const removeBadges = () => {
-      const candidates = document.querySelectorAll<HTMLElement>("a, button, div, iframe");
-      candidates.forEach((node) => {
-        const style = window.getComputedStyle(node);
-        const rect = node.getBoundingClientRect();
-        const zIndex = Number.parseInt(style.zIndex, 10);
-        const nearBottomRight =
-          rect.right >= window.innerWidth - 24 && rect.bottom >= window.innerHeight - 24;
-        const compactWidget =
-          rect.width >= 80 && rect.width <= 360 && rect.height >= 24 && rect.height <= 140;
-        const floatingLayer = style.position === "fixed" && (Number.isNaN(zIndex) || zIndex >= 50);
-        const interactiveWidget =
-          node.matches("a, button") || node.querySelector("a, button, svg") != null;
-        if (
-          floatingLayer &&
-          nearBottomRight &&
-          compactWidget &&
-          interactiveWidget &&
-          node.closest("[data-radix-popper-content-wrapper]") == null
-        ) {
-          node.remove();
-        }
-      });
-    };
-
-    removeBadges();
-    const observer = new MutationObserver(removeBadges);
-    observer.observe(document.body, { childList: true, subtree: true });
-    const timer = window.setInterval(removeBadges, 1000);
-    return () => {
-      observer.disconnect();
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  return null;
-}
-
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RemoveInjectedFloatingBadge />
       <Outlet />
     </QueryClientProvider>
   );
