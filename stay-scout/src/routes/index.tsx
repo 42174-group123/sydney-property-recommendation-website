@@ -5,7 +5,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listListings,
-  searchListings,
   getMyHost,
   logUserAction,
   type ListingCard as ListingCardType,
@@ -25,6 +24,7 @@ export const Route = createFileRoute("/")({
 });
 
 const PAGE_SIZE = 20;
+const DEFAULT_ML_BACKEND_URL = "https://stay-scout-ml-backend.onrender.com";
 const FILTER_STORAGE_KEY = "stay-scout.activeFilters";
 
 function hasAnyFilter(filters: Filters): boolean {
@@ -73,6 +73,7 @@ function writeStoredFilters(filters: Filters | null) {
 function normalizeRankedPage(page: {
   items?: Array<ListingCardType & { id: unknown }>;
   nextOffset?: number;
+  offset?: number;
 }): { items: ListingCardType[]; nextOffset: number } {
   const items = (page.items ?? []).map((item) => ({ ...item, id: String(item.id) }));
   const unscored = items.filter(
@@ -82,17 +83,71 @@ function normalizeRankedPage(page: {
     throw new Error(`ML ranking backend returned ${unscored.length} unscored listings`);
   }
 
-  return { items, nextOffset: page.nextOffset ?? items.length };
+  return { items, nextOffset: page.nextOffset ?? (page.offset ?? 0) + items.length };
+}
+
+function requestProbablyNeverReachedBackend(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    error instanceof TypeError ||
+    message.includes("Failed to fetch") ||
+    message.includes("NetworkError") ||
+    message.includes("Load failed")
+  );
+}
+
+async function rankListingsFromBrowser({
+  filters,
+  offset,
+  limit,
+  userId,
+}: {
+  filters: Filters;
+  offset: number;
+  limit: number;
+  userId: string;
+}): Promise<{ items: ListingCardType[]; nextOffset: number }> {
+  const baseUrl = import.meta.env.VITE_ML_BACKEND_URL || DEFAULT_ML_BACKEND_URL;
+  const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}/rank-listings`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      offset,
+      limit,
+      listing_ids: null,
+      filters: {
+        min_accommodates: filters.min_accommodates,
+        min_bathrooms: filters.min_bathrooms,
+        min_bedrooms: filters.min_bedrooms,
+        min_beds: filters.min_beds,
+        min_price: filters.min_price,
+        max_price: filters.max_price,
+        min_nights: filters.min_nights,
+        instant_bookable: filters.instant_bookable,
+        neighbourhood: filters.neighbourhood,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`ML ranking backend returned ${response.status}: ${await response.text()}`);
+  }
+
+  const payload = (await response.json()) as {
+    items?: Array<ListingCardType & { id: unknown }>;
+    nextOffset?: number;
+  };
+  return normalizeRankedPage({ ...payload, offset });
 }
 
 function Index() {
   const navigate = useNavigate();
-  const { isAuthenticated, user, signOut } = useAuth();
+  const { isAuthenticated, user, signOut, loading: authLoading } = useAuth();
   const [gateOpen, setGateOpen] = useState(false);
   const [hostOpen, setHostOpen] = useState(false);
   const queryClient = useQueryClient();
   const fetchListings = useServerFn(listListings);
-  const fetchRankedListings = useServerFn(searchListings);
   const fetchMyHost = useServerFn(getMyHost);
   const recordUserAction = useServerFn(logUserAction);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -105,10 +160,10 @@ function Index() {
   const [rankedNextOffset, setRankedNextOffset] = useState(0);
   const [rankingError, setRankingError] = useState<string | null>(null);
 
-  const setActiveFilters = (next: Filters | null) => {
+  const setActiveFilters = useCallback((next: Filters | null) => {
     setFiltersState(next);
     writeStoredFilters(next);
-  };
+  }, []);
 
   const requireLogin = useCallback(() => {
     setGateOpen(true);
@@ -140,29 +195,36 @@ function Index() {
         return;
       }
 
+      let keepLoading = false;
       try {
-        const page = normalizeRankedPage(
-          await fetchRankedListings({
-            data: {
-              ...activeFilters,
-              offset,
-              limit: PAGE_SIZE,
-              user_id: userId,
-            },
-          }),
-        );
+        const page = await rankListingsFromBrowser({
+          filters: activeFilters,
+          offset,
+          limit: PAGE_SIZE,
+          userId,
+        });
         setRankedPages((prev) => (replace ? [page] : [...prev, page]));
         setRankedNextOffset(page.nextOffset);
         setRankedHasMore(page.items.length === PAGE_SIZE);
       } catch (error) {
+        if (requestProbablyNeverReachedBackend(error)) {
+          keepLoading = true;
+          console.error(
+            "ML ranking request did not reach the backend; keeping filtered view loading.",
+            error,
+          );
+          return;
+        }
         setRankingError(error instanceof Error ? error.message : "ML ranking request failed");
         setRankedHasMore(false);
         if (replace) setRankedPages([]);
       } finally {
-        setRankedLoading(false);
+        if (!keepLoading) {
+          setRankedLoading(false);
+        }
       }
     },
-    [fetchRankedListings, requireLogin, resolveUserId],
+    [requireLogin, resolveUserId],
   );
 
   const hostQuery = useQuery({
@@ -180,6 +242,16 @@ function Index() {
     return () => clearTimeout(t);
   }, [isAuthenticated, hostQuery]);
 
+  useEffect(() => {
+    if (authLoading || isAuthenticated || !filters) return;
+    setActiveFilters(null);
+    setRankedPages([]);
+    setRankedHasMore(false);
+    setRankedNextOffset(0);
+    setRankedLoading(false);
+    setRankingError(null);
+  }, [authLoading, filters, isAuthenticated, setActiveFilters]);
+
   const query = useInfiniteQuery({
     queryKey: ["listings"],
     queryFn: ({ pageParam }) => fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } }),
@@ -196,9 +268,16 @@ function Index() {
       setRankingError(null);
       return;
     }
-    if (!isAuthenticated || rankedLoading || rankedPages.length > 0) return;
+    if (authLoading || !isAuthenticated || rankedLoading || rankedPages.length > 0) return;
     void loadRankedListings(filters, 0, true);
-  }, [filters, isAuthenticated, loadRankedListings, rankedLoading, rankedPages.length]);
+  }, [
+    authLoading,
+    filters,
+    isAuthenticated,
+    loadRankedListings,
+    rankedLoading,
+    rankedPages.length,
+  ]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -261,11 +340,17 @@ function Index() {
     });
   };
 
+  const filteredSearchActive = filters !== null;
+  const filteredSearchWaiting =
+    filteredSearchActive && !rankingError && (rankedLoading || rankedPages.length === 0);
   const items = filters
     ? rankedPages.flatMap((p) => p.items)
     : (query.data?.pages.flatMap((p) => p.items) ?? []);
-  const isListLoading = filters ? rankedLoading : query.isLoading;
+  const isListLoading = filters ? filteredSearchWaiting : query.isLoading;
   const hasMoreListings = filters ? rankedHasMore : query.hasNextPage;
+  const showEndMessage = filters
+    ? !filteredSearchWaiting && !rankingError && !hasMoreListings
+    : !query.isLoading && !hasMoreListings;
 
   return (
     <div className="min-h-screen bg-secondary">
@@ -396,9 +481,9 @@ function Index() {
 
         {hasMoreListings ? (
           <div ref={sentinelRef} className="h-16" />
-        ) : (
+        ) : showEndMessage ? (
           <p className="mt-10 text-center text-sm text-muted-foreground">You've reached the end.</p>
-        )}
+        ) : null}
       </main>
 
       <LoginGateModal open={gateOpen} onClose={() => setGateOpen(false)} />
