@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import gc
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +25,15 @@ class TrainingCycleResult:
 
 def make_run_id() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _prepare_run_dir(settings: Settings, run_id: str) -> Path:
+    run_name = run_id if settings.retain_local_runs else "latest"
+    run_dir = settings.data_dir / "runs" / run_name
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
 
 
 def _resolve_path(settings: Settings, path: Path) -> Path:
@@ -143,8 +154,7 @@ def run_training_cycle(
     run_id: str | None = None,
 ) -> TrainingCycleResult:
     run_id = run_id or make_run_id()
-    run_dir = settings.data_dir / "runs" / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = _prepare_run_dir(settings, run_id)
 
     listings, actions, synthetic_actions, raw_actions = load_training_inputs(
         settings,
@@ -152,16 +162,17 @@ def run_training_cycle(
         actions_csv=actions_csv,
     )
 
-    _save_and_log_input_snapshot(
-        settings=settings,
-        run_id=run_id,
-        run_dir=run_dir,
-        source="local_csv" if listings_csv is not None else "supabase",
-        listings=listings,
-        raw_actions=raw_actions,
-        canonical_actions=actions,
-        synthetic_actions=synthetic_actions,
-    )
+    if settings.upload_input_snapshots:
+        _save_and_log_input_snapshot(
+            settings=settings,
+            run_id=run_id,
+            run_dir=run_dir,
+            source="local_csv" if listings_csv is not None else "supabase",
+            listings=listings,
+            raw_actions=raw_actions,
+            canonical_actions=actions,
+            synthetic_actions=synthetic_actions,
+        )
 
     review_output = train_review_score_model(
         listings,
@@ -169,6 +180,7 @@ def run_training_cycle(
         run_id=run_id,
         run_dir=run_dir,
     )
+    gc.collect()
 
     preference_output = train_user_preference_model(
         listings,
@@ -177,6 +189,7 @@ def run_training_cycle(
         run_id=run_id,
         run_dir=run_dir,
     )
+    gc.collect()
 
     return TrainingCycleResult(
         run_id=run_id,

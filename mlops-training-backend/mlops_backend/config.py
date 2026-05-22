@@ -71,8 +71,11 @@ class Settings:
     cv_folds: int
     hpo_iterations: int
     train_n_jobs: int
+    max_tree_estimators: int
     max_table_rows: int
     page_size: int
+    retain_local_runs: bool
+    upload_input_snapshots: bool
     cors_allow_origins: tuple[str, ...]
     workspace_dir: Path
     data_dir: Path
@@ -169,8 +172,11 @@ def load_settings(workspace_dir: Path | None = None) -> Settings:
         cv_folds=_int_env("CV_FOLDS", 3),
         hpo_iterations=_int_env("HPO_ITERATIONS", 12),
         train_n_jobs=_int_env("TRAIN_N_JOBS", 1),
+        max_tree_estimators=_int_env("MAX_TREE_ESTIMATORS", 200),
         max_table_rows=_int_env("MAX_TABLE_ROWS", 100000),
         page_size=_int_env("PAGE_SIZE", 1000),
+        retain_local_runs=_bool_env("RETAIN_LOCAL_RUNS", False),
+        upload_input_snapshots=_bool_env("UPLOAD_INPUT_SNAPSHOTS", False),
         cors_allow_origins=tuple(
             origin.strip()
             for origin in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")

@@ -145,14 +145,15 @@ review_score_source
 ## What Each Cycle Does
 
 1. Pulls `listings` and `user_action` from Supabase.
-2. Saves and uploads the raw Supabase table snapshots to ClearML.
+2. Pulls only the columns needed by the two feature pipelines, instead of the full wide listing table.
 3. Canonicalises real `user_action` rows.
 4. Optionally trims and merges synthetic browsing events into the same canonical event shape.
-5. Uploads the canonicalised training event snapshot and snapshot metadata.
+5. Optionally uploads input snapshots when `UPLOAD_INPUT_SNAPSHOTS=true`.
 6. Trains the review score rating pipeline with HPO.
 7. Registers the best review model as a ClearML artifact for later backend inference.
 8. Trains the user preference pipeline with HPO by joining combined real/synthetic action rows to listing features.
 9. Uploads model artifacts, metrics, HPO tables, plots, prediction samples, and metadata to ClearML.
+10. Replaces the local `data/runs/latest` directory on the next scheduled retrain unless `RETAIN_LOCAL_RUNS=true`.
 
 ## ClearML Artifacts
 
@@ -172,7 +173,7 @@ synthetic_user_action_trimmed
 snapshot_metadata
 ```
 
-Snapshot table artifacts are uploaded as gzip-compressed CSV files to reduce ClearML files-server timeouts.
+Snapshot table artifacts are disabled by default on small Render cron instances to stay below the memory limit. Enable `UPLOAD_INPUT_SNAPSHOTS=true` for a heavier evidence run when you have more memory.
 
 Review rating project:
 

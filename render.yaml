@@ -105,12 +105,22 @@ services:
       - key: CV_FOLDS
         value: "3"
       - key: HPO_ITERATIONS
-        value: "12"
+        value: "4"
       - key: TRAIN_N_JOBS
         value: "1"
       - key: LOKY_MAX_CPU_COUNT
         value: "1"
+      - key: MAX_TREE_ESTIMATORS
+        value: "120"
       - key: MAX_TABLE_ROWS
-        value: "100000"
+        value: "50000"
       - key: PAGE_SIZE
         value: "1000"
+      - key: RETAIN_LOCAL_RUNS
+        value: "false"
+      - key: UPLOAD_INPUT_SNAPSHOTS
+        value: "false"
+      - key: MPLCONFIGDIR
+        value: /tmp/matplotlib
+      - key: JOBLIB_TEMP_FOLDER
+        value: /tmp/joblib

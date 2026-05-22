@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import math
 import os
 from dataclasses import dataclass
@@ -183,6 +184,20 @@ def _param_space_size(param_space: dict[str, list[Any]]) -> int:
     return total
 
 
+def _selection_rank(metrics: dict[str, Any]) -> tuple[float, float, float]:
+    return (
+        float(metrics["cv_rmse"]),
+        float(metrics["rmse"]),
+        float(metrics["mae"]),
+    )
+
+
+def _tree_estimator_options(settings: Settings) -> list[int]:
+    options = [60, 120, 200, 350]
+    bounded = [value for value in options if value <= settings.max_tree_estimators]
+    return bounded or [max(10, settings.max_tree_estimators)]
+
+
 def _fit_with_hpo(
     *,
     model_name: str,
@@ -231,6 +246,7 @@ def _fit_with_hpo(
 
 def _review_candidates(settings: Settings) -> dict[str, tuple[Pipeline, dict[str, list[Any]]]]:
     random_state = settings.random_state
+    tree_estimators = _tree_estimator_options(settings)
     return {
         "LinearRegression": (Pipeline([("model", LinearRegression())]), {}),
         "Ridge": (
@@ -247,7 +263,7 @@ def _review_candidates(settings: Settings) -> dict[str, tuple[Pipeline, dict[str
         "RandomForest": (
             Pipeline([("model", RandomForestRegressor(random_state=random_state, n_jobs=settings.train_n_jobs))]),
             {
-                "model__n_estimators": [120, 200, 350],
+                "model__n_estimators": tree_estimators,
                 "model__max_depth": [8, 12, 18, None],
                 "model__min_samples_leaf": [1, 2, 4],
                 "model__max_features": ["sqrt", 0.7, 1.0],
@@ -256,7 +272,7 @@ def _review_candidates(settings: Settings) -> dict[str, tuple[Pipeline, dict[str
         "ExtraTrees": (
             Pipeline([("model", ExtraTreesRegressor(random_state=random_state, n_jobs=settings.train_n_jobs))]),
             {
-                "model__n_estimators": [120, 200, 350],
+                "model__n_estimators": tree_estimators,
                 "model__max_depth": [8, 12, 18, None],
                 "model__min_samples_leaf": [1, 2, 4],
                 "model__max_features": ["sqrt", 0.7, 1.0],
@@ -265,7 +281,7 @@ def _review_candidates(settings: Settings) -> dict[str, tuple[Pipeline, dict[str
         "GradientBoosting": (
             Pipeline([("model", GradientBoostingRegressor(random_state=random_state))]),
             {
-                "model__n_estimators": [100, 200, 350],
+                "model__n_estimators": [value for value in tree_estimators if value >= 100] or tree_estimators,
                 "model__learning_rate": [0.03, 0.05, 0.08, 0.12],
                 "model__max_depth": [2, 3, 4],
                 "model__subsample": [0.7, 0.9, 1.0],
@@ -303,6 +319,7 @@ def train_review_score_model(
             "run_id": run_id,
             "hpo_iterations": settings.hpo_iterations,
             "train_n_jobs": settings.train_n_jobs,
+            "max_tree_estimators": settings.max_tree_estimators,
             "cv_folds": settings.cv_folds,
             "test_size": settings.test_size,
             "target": "review_scores_rating_norm",
@@ -330,8 +347,10 @@ def train_review_score_model(
 
     results: list[dict[str, Any]] = []
     hpo_tables: list[pd.DataFrame] = []
-    trained_models: dict[str, Pipeline] = {}
-    predictions: dict[str, np.ndarray] = {}
+    best_model: Pipeline | None = None
+    best_model_name: str | None = None
+    best_y_pred: np.ndarray | None = None
+    best_rank: tuple[float, float, float] | None = None
 
     for model_name, (estimator, param_space) in _review_candidates(settings).items():
         best_estimator, best_params, hpo_df = _fit_with_hpo(
@@ -348,8 +367,17 @@ def train_review_score_model(
         metrics.update({"model": model_name, "cv_rmse": best_cv_rmse, "best_params": best_params})
         results.append(metrics)
         hpo_tables.append(hpo_df)
-        trained_models[model_name] = best_estimator
-        predictions[model_name] = y_pred
+        rank = _selection_rank(metrics)
+        if best_rank is None or rank < best_rank:
+            if best_model is not None:
+                del best_model
+            best_model = best_estimator
+            best_model_name = model_name
+            best_y_pred = y_pred
+            best_rank = rank
+        else:
+            del best_estimator
+        gc.collect()
         for metric_name in ["rmse", "mae", "r2", "cv_rmse"]:
             run.report_scalar(metric_name, model_name, float(metrics[metric_name]))
 
@@ -372,8 +400,8 @@ def train_review_score_model(
         _plot_metric_bar(metrics_df, metric, plots_dir / f"review_model_comparison_{metric}.png", run)
 
     best_model_name = str(metrics_df.iloc[0]["model"])
-    best_model = trained_models[best_model_name]
-    best_y_pred = predictions[best_model_name]
+    if best_model is None or best_y_pred is None:
+        raise RuntimeError("No review score model was fitted.")
     _plot_residuals(y_test, best_y_pred, "Review Rating", plots_dir, run)
 
     final_model = clone(best_model)
@@ -432,6 +460,7 @@ def train_review_score_model(
 
 def _preference_candidates(settings: Settings) -> dict[str, tuple[Pipeline, dict[str, list[Any]]]]:
     random_state = settings.random_state
+    tree_estimators = _tree_estimator_options(settings)
     tree_preprocessor = ColumnTransformer(
         transformers=[
             ("cat", _make_one_hot_encoder(), PREFERENCE_CATEGORICAL_FEATURES),
@@ -463,7 +492,7 @@ def _preference_candidates(settings: Settings) -> dict[str, tuple[Pipeline, dict
         "RandomForest": (
             Pipeline([("preprocessor", tree_preprocessor), ("regressor", RandomForestRegressor(random_state=random_state, n_jobs=settings.train_n_jobs))]),
             {
-                "regressor__n_estimators": [120, 200, 350],
+                "regressor__n_estimators": tree_estimators,
                 "regressor__max_depth": [8, 12, 18, None],
                 "regressor__min_samples_leaf": [1, 2, 4],
                 "regressor__max_features": ["sqrt", 0.7, 1.0],
@@ -472,7 +501,7 @@ def _preference_candidates(settings: Settings) -> dict[str, tuple[Pipeline, dict
         "ExtraTrees": (
             Pipeline([("preprocessor", tree_preprocessor), ("regressor", ExtraTreesRegressor(random_state=random_state, n_jobs=settings.train_n_jobs))]),
             {
-                "regressor__n_estimators": [120, 200, 350],
+                "regressor__n_estimators": tree_estimators,
                 "regressor__max_depth": [8, 12, 18, None],
                 "regressor__min_samples_leaf": [1, 2, 4],
                 "regressor__max_features": ["sqrt", 0.7, 1.0],
@@ -481,7 +510,7 @@ def _preference_candidates(settings: Settings) -> dict[str, tuple[Pipeline, dict
         "GradientBoosting": (
             Pipeline([("preprocessor", tree_preprocessor), ("regressor", GradientBoostingRegressor(random_state=random_state))]),
             {
-                "regressor__n_estimators": [100, 200, 350],
+                "regressor__n_estimators": [value for value in tree_estimators if value >= 100] or tree_estimators,
                 "regressor__learning_rate": [0.03, 0.05, 0.08, 0.12],
                 "regressor__max_depth": [2, 3, 4],
                 "regressor__subsample": [0.7, 0.9, 1.0],
@@ -535,6 +564,7 @@ def train_user_preference_model(
             "run_id": run_id,
             "hpo_iterations": settings.hpo_iterations,
             "train_n_jobs": settings.train_n_jobs,
+            "max_tree_estimators": settings.max_tree_estimators,
             "cv_folds": settings.cv_folds,
             "test_size": settings.test_size,
             "target": PREFERENCE_TARGET_COLUMN,
@@ -579,8 +609,10 @@ def train_user_preference_model(
 
     results: list[dict[str, Any]] = []
     hpo_tables: list[pd.DataFrame] = []
-    trained_models: dict[str, Pipeline] = {}
-    predictions: dict[str, np.ndarray] = {}
+    best_model: Pipeline | None = None
+    best_model_name: str | None = None
+    best_y_pred: np.ndarray | None = None
+    best_rank: tuple[float, float, float] | None = None
 
     for model_name, (estimator, param_space) in _preference_candidates(settings).items():
         best_estimator, best_params, hpo_df = _fit_with_hpo(
@@ -597,8 +629,17 @@ def train_user_preference_model(
         metrics.update({"model": model_name, "cv_rmse": best_cv_rmse, "best_params": best_params})
         results.append(metrics)
         hpo_tables.append(hpo_df)
-        trained_models[model_name] = best_estimator
-        predictions[model_name] = y_pred
+        rank = _selection_rank(metrics)
+        if best_rank is None or rank < best_rank:
+            if best_model is not None:
+                del best_model
+            best_model = best_estimator
+            best_model_name = model_name
+            best_y_pred = y_pred
+            best_rank = rank
+        else:
+            del best_estimator
+        gc.collect()
         for metric_name in ["rmse", "mae", "r2", "cv_rmse"]:
             run.report_scalar(metric_name, model_name, float(metrics[metric_name]))
 
@@ -625,8 +666,8 @@ def train_user_preference_model(
         _plot_metric_bar(metrics_df, metric, plots_dir / f"user_preference_model_comparison_{metric}.png", run)
 
     best_model_name = str(metrics_df.iloc[0]["model"])
-    best_model = trained_models[best_model_name]
-    best_y_pred = predictions[best_model_name]
+    if best_model is None or best_y_pred is None:
+        raise RuntimeError("No user preference model was fitted.")
     _plot_residuals(y_test, best_y_pred, "User Preference", plots_dir, run)
 
     test_predictions = X_test.copy()
