@@ -122,27 +122,27 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RemoveInjectedEditorBadge() {
+function RemoveInjectedFloatingBadge() {
   useEffect(() => {
     const removeBadges = () => {
-      const builderName = ["lo", "vable"].join("");
       const candidates = document.querySelectorAll<HTMLElement>("a, button, div, iframe");
       candidates.forEach((node) => {
-        const text = node.textContent?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
-        const src = node instanceof HTMLIFrameElement ? node.src.toLowerCase() : "";
-        const href = node instanceof HTMLAnchorElement ? node.href.toLowerCase() : "";
-        const className = String(node.getAttribute("class") ?? "").toLowerCase();
-        const id = String(node.id ?? "").toLowerCase();
-        const editorPhrase = ["ed", "it with"].join("");
-        const isInjectedEditorBadge =
-          (text.includes(`${editorPhrase} ${builderName}`) || text === editorPhrase) &&
-          text.length <= 80;
+        const style = window.getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        const zIndex = Number.parseInt(style.zIndex, 10);
+        const nearBottomRight =
+          rect.right >= window.innerWidth - 24 && rect.bottom >= window.innerHeight - 24;
+        const compactWidget =
+          rect.width >= 80 && rect.width <= 360 && rect.height >= 24 && rect.height <= 140;
+        const floatingLayer = style.position === "fixed" && (Number.isNaN(zIndex) || zIndex >= 50);
+        const interactiveWidget =
+          node.matches("a, button") || node.querySelector("a, button, svg") != null;
         if (
-          isInjectedEditorBadge ||
-          src.includes(builderName) ||
-          href.includes(builderName) ||
-          className.includes(builderName) ||
-          id.includes(builderName)
+          floatingLayer &&
+          nearBottomRight &&
+          compactWidget &&
+          interactiveWidget &&
+          node.closest("[data-radix-popper-content-wrapper]") == null
         ) {
           node.remove();
         }
@@ -167,7 +167,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RemoveInjectedEditorBadge />
+      <RemoveInjectedFloatingBadge />
       <Outlet />
     </QueryClientProvider>
   );

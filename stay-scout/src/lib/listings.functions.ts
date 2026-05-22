@@ -55,6 +55,7 @@ async function getOptionalUserId(): Promise<string | null> {
 type ListingFiltersInput = {
   offset: number;
   limit: number;
+  user_id?: string | null;
   listing_ids?: ListingId[] | null;
   min_accommodates?: number | null;
   min_bathrooms?: number | null;
@@ -91,7 +92,7 @@ async function rankListingsWithMl(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
   try {
-    const userId = await getOptionalUserId();
+    const userId = data.user_id ?? (await getOptionalUserId());
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/rank-listings`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -172,6 +173,7 @@ export const listListings = createServerFn({ method: "GET" })
 const filterSchema = z.object({
   offset: z.number().int().min(0).max(100000).default(0),
   limit: z.number().int().min(1).max(40).default(20),
+  user_id: z.string().min(1).nullable().optional(),
   min_accommodates: z.number().int().min(0).nullable().optional(),
   min_bathrooms: z.number().min(0).nullable().optional(),
   min_bedrooms: z.number().min(0).nullable().optional(),

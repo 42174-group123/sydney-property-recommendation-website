@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listListings,
+  searchListings,
   getMyHost,
   logUserAction,
   type ListingCard as ListingCardType,
@@ -24,7 +25,6 @@ export const Route = createFileRoute("/")({
 });
 
 const PAGE_SIZE = 20;
-const DEFAULT_ML_BACKEND_URL = "https://stay-scout-ml-backend.onrender.com";
 const FILTER_STORAGE_KEY = "stay-scout.activeFilters";
 
 function hasAnyFilter(filters: Filters): boolean {
@@ -70,50 +70,11 @@ function writeStoredFilters(filters: Filters | null) {
   window.sessionStorage.removeItem(FILTER_STORAGE_KEY);
 }
 
-async function rankListingsFromBrowser({
-  filters,
-  offset,
-  limit,
-  userId,
-}: {
-  filters: Filters;
-  offset: number;
-  limit: number;
-  userId?: string | null;
-}): Promise<{ items: ListingCardType[]; nextOffset: number }> {
-  if (!userId) throw new Error("Login is required for ML match scoring");
-  const baseUrl = import.meta.env.VITE_ML_BACKEND_URL || DEFAULT_ML_BACKEND_URL;
-
-  const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}/rank-listings`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      user_id: userId ?? null,
-      offset,
-      limit,
-      filters: {
-        min_accommodates: filters.min_accommodates,
-        min_bathrooms: filters.min_bathrooms,
-        min_bedrooms: filters.min_bedrooms,
-        min_beds: filters.min_beds,
-        min_price: filters.min_price,
-        max_price: filters.max_price,
-        min_nights: filters.min_nights,
-        instant_bookable: filters.instant_bookable,
-        neighbourhood: filters.neighbourhood,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`ML ranking backend returned ${response.status}: ${await response.text()}`);
-  }
-
-  const payload = (await response.json()) as {
-    items?: Array<ListingCardType & { id: unknown }>;
-    nextOffset?: number;
-  };
-  const items = (payload.items ?? []).map((item) => ({ ...item, id: String(item.id) }));
+function normalizeRankedPage(page: {
+  items?: Array<ListingCardType & { id: unknown }>;
+  nextOffset?: number;
+}): { items: ListingCardType[]; nextOffset: number } {
+  const items = (page.items ?? []).map((item) => ({ ...item, id: String(item.id) }));
   const unscored = items.filter(
     (item) => typeof item.match_score !== "number" || !Number.isFinite(item.match_score),
   );
@@ -121,7 +82,7 @@ async function rankListingsFromBrowser({
     throw new Error(`ML ranking backend returned ${unscored.length} unscored listings`);
   }
 
-  return { items, nextOffset: payload.nextOffset ?? offset + items.length };
+  return { items, nextOffset: page.nextOffset ?? items.length };
 }
 
 function Index() {
@@ -131,6 +92,7 @@ function Index() {
   const [hostOpen, setHostOpen] = useState(false);
   const queryClient = useQueryClient();
   const fetchListings = useServerFn(listListings);
+  const fetchRankedListings = useServerFn(searchListings);
   const fetchMyHost = useServerFn(getMyHost);
   const recordUserAction = useServerFn(logUserAction);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -179,12 +141,16 @@ function Index() {
       }
 
       try {
-        const page = await rankListingsFromBrowser({
-          filters: activeFilters,
-          offset,
-          limit: PAGE_SIZE,
-          userId,
-        });
+        const page = normalizeRankedPage(
+          await fetchRankedListings({
+            data: {
+              ...activeFilters,
+              offset,
+              limit: PAGE_SIZE,
+              user_id: userId,
+            },
+          }),
+        );
         setRankedPages((prev) => (replace ? [page] : [...prev, page]));
         setRankedNextOffset(page.nextOffset);
         setRankedHasMore(page.items.length === PAGE_SIZE);
@@ -196,7 +162,7 @@ function Index() {
         setRankedLoading(false);
       }
     },
-    [requireLogin, resolveUserId],
+    [fetchRankedListings, requireLogin, resolveUserId],
   );
 
   const hostQuery = useQuery({
@@ -216,8 +182,7 @@ function Index() {
 
   const query = useInfiniteQuery({
     queryKey: ["listings"],
-    queryFn: ({ pageParam }) =>
-      fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } }),
+    queryFn: ({ pageParam }) => fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } }),
     initialPageParam: 0,
     enabled: filters === null,
     getNextPageParam: (last) => (last.items.length < PAGE_SIZE ? undefined : last.nextOffset),
