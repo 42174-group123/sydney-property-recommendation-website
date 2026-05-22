@@ -166,14 +166,17 @@ function Index() {
     return () => clearTimeout(t);
   }, [isAuthenticated, hostQuery]);
 
+  const canRunListingQuery = !authLoading && (filters === null || (isAuthenticated && !!user?.id));
+
   const query = useInfiniteQuery({
     queryKey: ["listings", filters, user?.id ?? null],
+    enabled: canRunListingQuery,
     queryFn: ({ pageParam }) => {
       if (!filters) {
         return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
       }
-      if (!isAuthenticated || !user?.id) {
-        return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
+      if (!user?.id) {
+        throw new Error("Login is required for ML match scoring");
       }
       return rankListingsFromBrowser({
         filters,
