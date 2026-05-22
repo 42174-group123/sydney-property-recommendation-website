@@ -122,7 +122,6 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-
 function RemoveLovableBadge() {
   useEffect(() => {
     const removeBadges = () => {
