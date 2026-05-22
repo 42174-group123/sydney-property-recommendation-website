@@ -1,104 +1,115 @@
 services:
   - type: web
-    name: stay-scout-ml-api
+    name: stay-scout-ml-backend
     runtime: python
-    plan: starter
     rootDir: mlops-training-backend
-    buildCommand: pip install -e .
+    plan: starter
+    buildCommand: pip install --upgrade pip && pip install -e .
     startCommand: uvicorn mlops_backend.app:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /health
     envVars:
-      - key: ENABLE_SCHEDULER
-        value: false
-      - key: RUN_ON_STARTUP
-        value: false
+      - key: PYTHON_VERSION
+        value: 3.11.10
+      - key: SUPABASE_URL
+        value: https://rmonjbexchkyvkgecacn.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: ENABLE_CLEARML
-        value: true
-      - key: PREFER_CLEARML_ARTIFACTS
-        value: true
-      - key: CLEARML_USE_LATEST_ARTIFACTS
-        value: true
-      - key: MODEL_CACHE_SECONDS
-        value: 1800
-      - key: MAX_RANKING_CANDIDATES
-        value: 20000
-      - key: RANKING_LISTING_CACHE_SECONDS
-        value: 300
-      - key: PREFERENCE_SCORE_WEIGHT
-        value: 0.6
-      - key: REVIEW_SCORE_WEIGHT
-        value: 0.4
+        value: "true"
       - key: CLEARML_WEB_HOST
         value: https://app.clear.ml/
       - key: CLEARML_API_HOST
         value: https://api.clear.ml
       - key: CLEARML_FILES_HOST
         value: https://files.clear.ml
-      - key: CLEARML_PROJECT_REVIEW
-        value: Stay Scout MLOps/Review Score Rating
-      - key: CLEARML_PROJECT_PREFERENCE
-        value: Stay Scout MLOps/User Preference
-      - key: CLEARML_REVIEW_TASK_NAME
-        value: Review Score Rating Training
-      - key: CLEARML_PREFERENCE_TASK_NAME
-        value: User Preference Training
-      - key: CLEARML_REVIEW_ARTIFACT_NAME
-        value: best_review_score_rating_model
-      - key: CLEARML_PREFERENCE_ARTIFACT_NAME
-        value: best_user_preference_model
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
       - key: CLEARML_API_ACCESS_KEY
         sync: false
       - key: CLEARML_API_SECRET_KEY
         sync: false
+      - key: PREFER_CLEARML_ARTIFACTS
+        value: "true"
+      - key: CLEARML_USE_LATEST_ARTIFACTS
+        value: "true"
+      - key: ENABLE_SCHEDULER
+        value: "false"
+      - key: RUN_ON_STARTUP
+        value: "false"
+      - key: RANKING_PREFER_LOCAL_SNAPSHOT
+        value: "false"
+      - key: RANKING_FETCH_USER_ACTIONS
+        value: "true"
+      - key: RANKING_USER_ACTION_CACHE_SECONDS
+        value: "1800"
+      - key: RANKING_LISTING_CACHE_SECONDS
+        value: "300"
+      - key: RANKING_USER_ACTION_TIMEOUT_SECONDS
+        value: "6"
+      - key: MAX_RANKING_CANDIDATES
+        value: "20000"
+      - key: PREFERENCE_SCORE_WEIGHT
+        value: "0.6"
+      - key: REVIEW_SCORE_WEIGHT
+        value: "0.4"
+      - key: MODEL_CACHE_SECONDS
+        value: "1800"
+      - key: TRAIN_N_JOBS
+        value: "1"
+      - key: LOKY_MAX_CPU_COUNT
+        value: "1"
 
   - type: cron
-    name: stay-scout-ml-trainer
+    name: stay-scout-ml-retrain
     runtime: python
-    plan: starter
     rootDir: mlops-training-backend
+    plan: starter
     schedule: "*/30 * * * *"
-    buildCommand: pip install -e .
+    buildCommand: pip install --upgrade pip && pip install -e .
     startCommand: python scripts/run_once.py
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.10
+      - key: SUPABASE_URL
+        value: https://rmonjbexchkyvkgecacn.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: ENABLE_CLEARML
-        value: true
-      - key: INCLUDE_SYNTHETIC_EVENTS
-        value: true
+        value: "true"
       - key: CLEARML_WEB_HOST
         value: https://app.clear.ml/
       - key: CLEARML_API_HOST
         value: https://api.clear.ml
       - key: CLEARML_FILES_HOST
         value: https://files.clear.ml
+      - key: CLEARML_API_ACCESS_KEY
+        sync: false
+      - key: CLEARML_API_SECRET_KEY
+        sync: false
+      - key: CLEARML_OUTPUT_URI
+        sync: false
       - key: CLEARML_PROJECT_DATA
         value: Stay Scout MLOps/Data Snapshots
       - key: CLEARML_PROJECT_REVIEW
         value: Stay Scout MLOps/Review Score Rating
       - key: CLEARML_PROJECT_PREFERENCE
         value: Stay Scout MLOps/User Preference
-      - key: HPO_ITERATIONS
-        value: 12
-      - key: CV_FOLDS
-        value: 3
+      - key: TRAIN_INTERVAL_MINUTES
+        value: "30"
+      - key: INCLUDE_SYNTHETIC_EVENTS
+        value: "true"
+      - key: SYNTHETIC_EVENTS_PATH
+        value: _source_artifacts/user_preference_model/synthetic_browsing_events.csv
+      - key: RANDOM_STATE
+        value: "42"
       - key: TEST_SIZE
-        value: 0.2
+        value: "0.2"
+      - key: CV_FOLDS
+        value: "3"
+      - key: HPO_ITERATIONS
+        value: "12"
       - key: TRAIN_N_JOBS
-        value: 1
+        value: "1"
       - key: LOKY_MAX_CPU_COUNT
-        value: 1
+        value: "1"
       - key: MAX_TABLE_ROWS
-        value: 100000
+        value: "100000"
       - key: PAGE_SIZE
-        value: 1000
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: CLEARML_API_ACCESS_KEY
-        sync: false
-      - key: CLEARML_API_SECRET_KEY
-        sync: false
+        value: "1000"
