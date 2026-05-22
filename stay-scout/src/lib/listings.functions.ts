@@ -132,21 +132,6 @@ async function rankListingsWithMl(
   }
 }
 
-function hasActiveListingFilters(data: ListingFiltersInput): boolean {
-  return Boolean(
-    data.listing_ids?.length ||
-    data.min_accommodates != null ||
-    data.min_bathrooms != null ||
-    data.min_bedrooms != null ||
-    data.min_beds != null ||
-    data.min_price != null ||
-    data.max_price != null ||
-    data.min_nights != null ||
-    data.instant_bookable != null ||
-    data.neighbourhood,
-  );
-}
-
 async function fetchSequentialListings(data: { offset: number; limit: number }) {
   const { data: rows, error } = await getServerClient()
     .from("listings")
@@ -168,31 +153,6 @@ export const listListings = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     return fetchSequentialListings(data);
-  });
-
-const filterSchema = z.object({
-  offset: z.number().int().min(0).max(100000).default(0),
-  limit: z.number().int().min(1).max(40).default(20),
-  user_id: z.string().min(1).nullable().optional(),
-  min_accommodates: z.number().int().min(0).nullable().optional(),
-  min_bathrooms: z.number().min(0).nullable().optional(),
-  min_bedrooms: z.number().min(0).nullable().optional(),
-  min_beds: z.number().min(0).nullable().optional(),
-  min_price: z.number().min(0).nullable().optional(),
-  max_price: z.number().min(0).nullable().optional(),
-  min_nights: z.number().int().min(0).nullable().optional(),
-  instant_bookable: z.boolean().nullable().optional(),
-  neighbourhood: z.string().trim().min(1).max(100).nullable().optional(),
-});
-
-export const searchListings = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => filterSchema.parse(input))
-  .handler(async ({ data }) => {
-    if (!hasActiveListingFilters(data)) {
-      return fetchSequentialListings(data);
-    }
-
-    return rankListingsWithMl(data);
   });
 
 export type ListingDetail = {

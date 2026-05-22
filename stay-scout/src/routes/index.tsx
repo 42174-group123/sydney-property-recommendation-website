@@ -108,6 +108,13 @@ async function rankListingsFromBrowser({
   userId: string;
 }): Promise<{ items: ListingCardType[]; nextOffset: number }> {
   const baseUrl = import.meta.env.VITE_ML_BACKEND_URL || DEFAULT_ML_BACKEND_URL;
+  console.info("[Stay Scout] POST /rank-listings", {
+    baseUrl,
+    userId,
+    offset,
+    limit,
+    filters,
+  });
   const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}/rank-listings`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -138,6 +145,11 @@ async function rankListingsFromBrowser({
     items?: Array<ListingCardType & { id: unknown }>;
     nextOffset?: number;
   };
+  console.info("[Stay Scout] POST /rank-listings response", {
+    status: response.status,
+    itemCount: payload.items?.length ?? 0,
+    nextOffset: payload.nextOffset,
+  });
   return normalizeRankedPage({ ...payload, offset });
 }
 
@@ -439,23 +451,30 @@ function Index() {
             >
               <FilterPanel
                 initialFilters={filters}
-                onApply={(f) => {
+                onApply={(f, action = "apply") => {
                   if (!isAuthenticated) {
                     setFiltersOpen(false);
                     setActiveFilters(null);
                     requireLogin();
                     return;
                   }
-                  const next = hasAnyFilter(f) ? f : null;
                   setFiltersOpen(false);
-                  setActiveFilters(next);
-                  if (next) {
+                  if (action === "reset") {
+                    setActiveFilters(null);
                     setRankedPages([]);
                     setRankedHasMore(false);
                     setRankedNextOffset(0);
                     setRankingError(null);
-                    void loadRankedListings(next, 0, true);
+                    setRankedLoading(false);
+                    return;
                   }
+                  const next = f;
+                  setActiveFilters(next);
+                  setRankedPages([]);
+                  setRankedHasMore(false);
+                  setRankedNextOffset(0);
+                  setRankingError(null);
+                  void loadRankedListings(next, 0, true);
                 }}
                 onClose={() => setFiltersOpen(false)}
               />
