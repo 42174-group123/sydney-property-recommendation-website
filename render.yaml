@@ -92,6 +92,8 @@ services:
         value: Stay Scout MLOps/Review Score Rating
       - key: CLEARML_PROJECT_PREFERENCE
         value: Stay Scout MLOps/User Preference
+      - key: CLEARML_REUSE_TASKS
+        value: "true"
       - key: TRAIN_INTERVAL_MINUTES
         value: "30"
       - key: INCLUDE_SYNTHETIC_EVENTS

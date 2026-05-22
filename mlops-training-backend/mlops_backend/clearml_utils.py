@@ -74,6 +74,7 @@ def init_clearml_run(
     task_name: str,
     tags: list[str] | None = None,
     output_uri: str | None = None,
+    reuse_last_task_id: bool = False,
 ) -> ClearMLRun:
     if not enabled:
         return ClearMLRun(task=None, enabled=False)
@@ -85,7 +86,8 @@ def init_clearml_run(
             project_name=project_name,
             task_name=task_name,
             tags=tags,
-            reuse_last_task_id=False,
+            reuse_last_task_id=reuse_last_task_id,
+            continue_last_task=False,
             output_uri=output_uri,
             auto_resource_monitoring=False,
         )

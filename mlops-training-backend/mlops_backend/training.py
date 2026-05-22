@@ -310,9 +310,12 @@ def train_review_score_model(
     run = init_clearml_run(
         enabled=settings.enable_clearml,
         project_name=settings.clearml_project_review,
-        task_name=f"Review Score Rating Training {run_id}",
+        task_name=settings.clearml_review_task_name
+        if settings.clearml_reuse_tasks
+        else f"{settings.clearml_review_task_name} {run_id}",
         tags=["scheduled", "review_score_rating", run_id],
         output_uri=settings.clearml_output_uri,
+        reuse_last_task_id=settings.clearml_reuse_tasks,
     )
     run.connect_params(
         {
@@ -555,9 +558,12 @@ def train_user_preference_model(
     run = init_clearml_run(
         enabled=settings.enable_clearml,
         project_name=settings.clearml_project_preference,
-        task_name=f"User Preference Training {run_id}",
+        task_name=settings.clearml_preference_task_name
+        if settings.clearml_reuse_tasks
+        else f"{settings.clearml_preference_task_name} {run_id}",
         tags=["scheduled", "user_preference", run_id],
         output_uri=settings.clearml_output_uri,
+        reuse_last_task_id=settings.clearml_reuse_tasks,
     )
     run.connect_params(
         {

@@ -154,6 +154,7 @@ review_score_source
 8. Trains the user preference pipeline with HPO by joining combined real/synthetic action rows to listing features.
 9. Uploads model artifacts, metrics, HPO tables, plots, prediction samples, and metadata to ClearML.
 10. Replaces the local `data/runs/latest` directory on the next scheduled retrain unless `RETAIN_LOCAL_RUNS=true`.
+11. Reuses the same ClearML task names on scheduled runs unless `CLEARML_REUSE_TASKS=false`.
 
 ## ClearML Artifacts
 

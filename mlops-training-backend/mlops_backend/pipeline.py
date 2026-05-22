@@ -123,9 +123,12 @@ def _save_and_log_input_snapshot(
     run = init_clearml_run(
         enabled=settings.enable_clearml,
         project_name=settings.clearml_project_data,
-        task_name=f"Supabase Training Snapshot {run_id}",
+        task_name="Supabase Training Snapshot"
+        if settings.clearml_reuse_tasks
+        else f"Supabase Training Snapshot {run_id}",
         tags=["scheduled", "data_snapshot", run_id, source],
         output_uri=settings.clearml_output_uri,
+        reuse_last_task_id=settings.clearml_reuse_tasks,
     )
     run.connect_params(metadata)
     run.upload_artifact("supabase_listings_snapshot", listings_artifact_path)

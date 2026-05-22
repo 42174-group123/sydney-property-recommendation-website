@@ -118,6 +118,7 @@ The trainer needs the same Supabase and ClearML credentials, plus:
 
 ```bash
 ENABLE_CLEARML=true
+CLEARML_REUSE_TASKS=true
 INCLUDE_SYNTHETIC_EVENTS=true
 HPO_ITERATIONS=4
 CV_FOLDS=2
@@ -134,8 +135,9 @@ JOBLIB_TEMP_FOLDER=/tmp/joblib
 ```
 
 The Render cron plan has a 512 MiB memory ceiling, so the production defaults
-use bounded HPO and overwrite `data/runs/latest` on each retrain. ClearML still
-receives the model artifacts, metrics, HPO tables, and plots needed for marking.
+use bounded HPO, overwrite `data/runs/latest` on each retrain, and reuse the
+same ClearML task names. ClearML still receives the model artifacts, metrics,
+HPO tables, and plots needed for marking.
 
 Each run:
 

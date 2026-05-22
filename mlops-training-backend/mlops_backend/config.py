@@ -40,6 +40,7 @@ class Settings:
     clearml_project_data: str
     clearml_project_review: str
     clearml_project_preference: str
+    clearml_reuse_tasks: bool
     clearml_review_task_id: str | None
     clearml_preference_task_id: str | None
     clearml_review_artifact_name: str
@@ -109,6 +110,7 @@ def load_settings(workspace_dir: Path | None = None) -> Settings:
             "CLEARML_PROJECT_PREFERENCE",
             "Stay Scout MLOps/User Preference",
         ),
+        clearml_reuse_tasks=_bool_env("CLEARML_REUSE_TASKS", True),
         clearml_review_task_id=os.getenv("CLEARML_REVIEW_TASK_ID") or None,
         clearml_preference_task_id=os.getenv("CLEARML_PREFERENCE_TASK_ID") or None,
         clearml_review_artifact_name=os.getenv(
