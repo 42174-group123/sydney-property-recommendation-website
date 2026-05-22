@@ -111,11 +111,14 @@ Endpoints:
 GET  /health
 POST /run-now
 POST /rank-listings
+POST /rank-candidates
 ```
 
 `POST /run-now` triggers a training cycle immediately while preserving the 30-minute schedule.
 
-`POST /rank-listings` fetches candidate listings, fills missing review quality with the review-score model, predicts user-property matchability with the preference model, combines the scores, min-max scales the combined score to `0-10`, and returns listing cards sorted by score. The frontend uses this endpoint when `ML_BACKEND_URL` is configured.
+`POST /rank-listings` is the legacy all-in-one route. It accepts filters, fetches matching listings, fills missing review quality with the review-score model, predicts user-property matchability with the preference model, combines the scores, converts the combined score to `0-10`, and returns listing cards sorted by score.
+
+`POST /rank-candidates` is the preferred route for the current frontend flow. The frontend/server keeps using the existing Supabase filter RPC to fetch one page of candidates, usually 20 listing IDs. It then sends those IDs to this endpoint. The backend pulls full listing features for only those candidates, scores just that page, ranks that page, and returns the same listings with match scores.
 
 Example:
 
@@ -131,6 +134,26 @@ Example:
 }
 ```
 
+Candidate ranking example:
+
+```json
+{
+  "user_id": "optional-supabase-user-id",
+  "listing_ids": ["123", "456", "789"],
+  "candidates": [
+    {
+      "id": "123",
+      "name": "Bondi Beach Apartment",
+      "picture_url": "https://...",
+      "host_picture_url": "https://...",
+      "price": "$220.00"
+    }
+  ]
+}
+```
+
+`listing_ids` are enough. `candidates` are optional card-field overrides for preserving exactly what the frontend already received from Supabase.
+
 Response items include:
 
 ```text
@@ -141,6 +164,8 @@ review_quality_score
 review_scores_rating_final
 review_score_source
 ```
+
+`match_score` is an absolute `0-10` score derived from the combined model score, not a page-local min-max. This keeps scores comparable as the frontend appends more 20-item batches during infinite scroll.
 
 ## What Each Cycle Does
 

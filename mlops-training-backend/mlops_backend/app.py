@@ -11,7 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .config import Settings, load_settings
-from .ranking import RankingRequest, RankingResponse, RankingService
+from .ranking import (
+    CandidateRankingRequest,
+    CandidateRankingResponse,
+    RankingRequest,
+    RankingResponse,
+    RankingService,
+)
 
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -121,6 +127,11 @@ def health() -> dict[str, Any]:
 @app.post("/rank-listings", response_model=RankingResponse)
 def rank_listings(request: RankingRequest) -> RankingResponse:
     return ranking_service.rank(request)
+
+
+@app.post("/rank-candidates", response_model=CandidateRankingResponse)
+def rank_candidates(request: CandidateRankingRequest) -> CandidateRankingResponse:
+    return ranking_service.rank_candidates(request)
 
 
 @app.post("/run-now", response_model=RunNowResponse)

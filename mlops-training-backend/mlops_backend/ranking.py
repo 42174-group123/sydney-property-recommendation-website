@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import http.client
 import json
-import math
 import ssl
 import threading
 import time
@@ -53,6 +52,20 @@ class RankingRequest(BaseModel):
     filters: RankingFilters = Field(default_factory=RankingFilters)
 
 
+class CandidateListing(BaseModel):
+    id: int | str
+    name: str | None = None
+    picture_url: str | None = None
+    host_picture_url: str | None = None
+    price: str | None = None
+
+
+class CandidateRankingRequest(BaseModel):
+    user_id: str | None = None
+    listing_ids: list[int | str] | None = Field(default=None, max_length=100)
+    candidates: list[CandidateListing] | None = Field(default=None, max_length=100)
+
+
 class RankedListing(BaseModel):
     id: str
     name: str | None = None
@@ -70,6 +83,12 @@ class RankedListing(BaseModel):
 class RankingResponse(BaseModel):
     items: list[RankedListing]
     nextOffset: int
+    total: int
+    model_source: str
+
+
+class CandidateRankingResponse(BaseModel):
+    items: list[RankedListing]
     total: int
     model_source: str
 
@@ -134,6 +153,24 @@ class RankingService:
             self._set_cached_ranking(cache_key, result, model_source)
             return self._ranking_response(result, request, model_source)
 
+    def rank_candidates(self, request: CandidateRankingRequest) -> CandidateRankingResponse:
+        cache_key = self._candidate_ranking_cache_key(request)
+        cached = self._get_cached_ranking(cache_key)
+        if cached is not None:
+            result, model_source = cached
+            return self._candidate_ranking_response(result, model_source)
+
+        with self._ranking_compute_lock:
+            cached = self._get_cached_ranking(cache_key)
+            if cached is not None:
+                result, model_source = cached
+                return self._candidate_ranking_response(result, model_source)
+
+            result = self._compute_candidate_ranking(request)
+            model_source = self._model_source()
+            self._set_cached_ranking(cache_key, result, model_source)
+            return self._candidate_ranking_response(result, model_source)
+
     def _compute_ranking(self, request: RankingRequest) -> pd.DataFrame:
         listings = self._get_listings()
         filtered = self._apply_filters(listings, request.filters)
@@ -145,16 +182,40 @@ class RankingService:
         if filtered.empty:
             return pd.DataFrame()
 
-        candidate_ids = pd.to_numeric(filtered["id"], errors="coerce").dropna().astype("int64")
-        user_actions, user_type = self._fetch_user_context(request.user_id)
+        return self._score_candidate_listings(filtered, request.user_id)
+
+    def _compute_candidate_ranking(self, request: CandidateRankingRequest) -> pd.DataFrame:
+        candidate_ids = self._candidate_ids(request)
+        if not candidate_ids:
+            return pd.DataFrame()
+
+        candidate_listings = self._get_listing_rows_for_ids(candidate_ids)
+        candidate_listings = self._merge_candidate_card_fields(candidate_listings, request.candidates or [])
+        if candidate_listings.empty:
+            return pd.DataFrame()
+
+        listing_id_series = pd.to_numeric(candidate_listings["id"], errors="coerce")
+        candidate_listings = candidate_listings[listing_id_series.isin(candidate_ids)].copy()
+        return self._score_candidate_listings(candidate_listings, request.user_id)
+
+    def _score_candidate_listings(self, candidate_listings: pd.DataFrame, user_id: str | None) -> pd.DataFrame:
+        candidate_listings = candidate_listings.copy()
+        if candidate_listings.empty or "id" not in candidate_listings:
+            return pd.DataFrame()
+
+        candidate_ids = pd.to_numeric(candidate_listings["id"], errors="coerce").dropna().astype("int64")
+        if candidate_ids.empty:
+            return pd.DataFrame()
+        user_actions, user_type = self._fetch_user_context(user_id)
 
         feature_ids = set(candidate_ids.tolist())
         if not user_actions.empty and "property_id" in user_actions:
             action_ids = pd.to_numeric(user_actions["property_id"], errors="coerce").dropna().astype("int64")
             feature_ids.update(action_ids.tolist())
 
-        listing_id_series = pd.to_numeric(listings["id"], errors="coerce")
-        feature_listings = listings[listing_id_series.isin(feature_ids)].copy()
+        feature_listings = self._get_listing_rows_for_ids(feature_ids)
+        if feature_listings.empty:
+            feature_listings = candidate_listings.copy()
         enriched_features = self._add_review_quality(feature_listings)
         listing_features = self._listing_features(enriched_features)
 
@@ -191,7 +252,7 @@ class RankingService:
         ).clip(0.0, 1.0)
         scored["match_score"] = self._score_0_to_10(scored["combined_score"])
 
-        card_cols = filtered[["id", "name", "picture_url", "host_picture_url", "price"]].copy()
+        card_cols = candidate_listings[["id", "name", "picture_url", "host_picture_url", "price"]].copy()
         card_cols["property_id"] = pd.to_numeric(card_cols["id"], errors="coerce").astype("Int64")
         result = card_cols.merge(scored, on="property_id", how="inner")
         result = result.sort_values(["combined_score", "property_id"], ascending=[False, True]).reset_index(drop=True)
@@ -228,6 +289,33 @@ class RankingService:
             model_source=model_source,
         )
 
+    def _candidate_ranking_response(
+        self,
+        result: pd.DataFrame,
+        model_source: str,
+    ) -> CandidateRankingResponse:
+        items = [
+            RankedListing(
+                id=str(row["id"]),
+                name=_clean_json_value(row.get("name")),
+                picture_url=_clean_json_value(row.get("picture_url")),
+                host_picture_url=_clean_json_value(row.get("host_picture_url")),
+                price=_clean_json_value(row.get("price")),
+                match_score=round(float(row["match_score"]), 1),
+                combined_score=round(float(row["combined_score"]), 6),
+                user_preference_score=round(float(row["user_preference_score"]), 6),
+                review_quality_score=round(float(row["review_quality_score"]), 6),
+                review_scores_rating_final=round(float(row["review_scores_rating_final"]), 3),
+                review_score_source=str(row["review_score_source"]),
+            )
+            for _, row in result.iterrows()
+        ]
+        return CandidateRankingResponse(
+            items=items,
+            total=len(items),
+            model_source=model_source,
+        )
+
     def _ranking_cache_key(self, request: RankingRequest) -> str:
         filters = (
             request.filters.model_dump()
@@ -237,6 +325,27 @@ class RankingService:
         filter_items = tuple(sorted(filters.items()))
         listing_ids = tuple(int(listing_id) for listing_id in request.listing_ids or [])
         return repr((request.user_id or "", listing_ids, filter_items))
+
+    def _candidate_ranking_cache_key(self, request: CandidateRankingRequest) -> str:
+        return repr(("candidates", request.user_id or "", tuple(self._candidate_ids(request))))
+
+    def _candidate_ids(self, request: CandidateRankingRequest) -> list[int]:
+        raw_ids: list[int | str] = []
+        raw_ids.extend(request.listing_ids or [])
+        raw_ids.extend(candidate.id for candidate in request.candidates or [])
+
+        ids: list[int] = []
+        seen: set[int] = set()
+        for raw_id in raw_ids:
+            try:
+                listing_id = int(str(raw_id))
+            except (TypeError, ValueError):
+                continue
+            if listing_id in seen:
+                continue
+            seen.add(listing_id)
+            ids.append(listing_id)
+        return ids
 
     def _get_cached_ranking(self, key: str) -> tuple[pd.DataFrame, str] | None:
         now = time.monotonic()
@@ -292,6 +401,90 @@ class RankingService:
                 listings = pd.read_csv(snapshot_path, low_memory=False)
             self._listings_cache = (now, listings.copy())
             return listings
+
+    def _listing_select_columns(self) -> str:
+        listing_columns = [
+            "name",
+            "picture_url",
+            "host_picture_url",
+            "neighbourhood_cleansed",
+            "instant_bookable",
+            *REVIEW_REQUIRED_COLUMNS,
+            *PREFERENCE_LISTING_REQUIRED_COLUMNS,
+        ]
+        return ",".join(dict.fromkeys(listing_columns))
+
+    def _get_listing_rows_for_ids(self, listing_ids: set[int] | list[int] | pd.Series) -> pd.DataFrame:
+        ids = []
+        seen: set[int] = set()
+        for raw_id in listing_ids:
+            try:
+                listing_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if listing_id in seen:
+                continue
+            seen.add(listing_id)
+            ids.append(listing_id)
+        if not ids:
+            return pd.DataFrame()
+
+        if self.settings.ranking_prefer_local_snapshot:
+            listings = self._get_listings()
+            listing_id_series = pd.to_numeric(listings["id"], errors="coerce")
+            return listings[listing_id_series.isin(ids)].copy()
+
+        try:
+            rows = self._supabase_rest_get(
+                "listings",
+                {
+                    "select": self._listing_select_columns(),
+                    "id": f"in.({','.join(str(listing_id) for listing_id in ids)})",
+                },
+            )
+            return pd.DataFrame(rows or [])
+        except Exception as exc:
+            print(f"Supabase listing id fetch failed; falling back to cached listing table: {exc}")
+            listings = self._get_listings()
+            listing_id_series = pd.to_numeric(listings["id"], errors="coerce")
+            return listings[listing_id_series.isin(ids)].copy()
+
+    def _merge_candidate_card_fields(
+        self,
+        listing_rows: pd.DataFrame,
+        candidates: list[CandidateListing],
+    ) -> pd.DataFrame:
+        if not candidates:
+            return listing_rows
+        overrides = pd.DataFrame(
+            [
+                (candidate.model_dump() if hasattr(candidate, "model_dump") else candidate.dict())
+                for candidate in candidates
+            ],
+        )
+        if listing_rows.empty:
+            listing_rows = overrides.copy()
+        else:
+            listing_rows = listing_rows.copy()
+
+        listing_rows["_id_key"] = pd.to_numeric(listing_rows["id"], errors="coerce").astype("Int64")
+        overrides["_id_key"] = pd.to_numeric(overrides["id"], errors="coerce").astype("Int64")
+        overrides = overrides.dropna(subset=["_id_key"]).drop_duplicates("_id_key", keep="first")
+        if overrides.empty:
+            listing_rows = listing_rows.drop(columns=["_id_key"])
+            return listing_rows
+
+        merged = listing_rows.merge(
+            overrides[["_id_key", "name", "picture_url", "host_picture_url", "price"]],
+            on="_id_key",
+            how="left",
+            suffixes=("", "_candidate"),
+        )
+        for col in ["name", "picture_url", "host_picture_url", "price"]:
+            candidate_col = f"{col}_candidate"
+            merged[col] = merged[candidate_col].combine_first(merged.get(col))
+            merged = merged.drop(columns=[candidate_col])
+        return merged.drop(columns=["_id_key"])
 
     def _apply_filters(self, listings: pd.DataFrame, filters: RankingFilters) -> pd.DataFrame:
         df = listings.copy()
@@ -555,8 +748,4 @@ class RankingService:
 
     def _score_0_to_10(self, values: pd.Series) -> pd.Series:
         numeric = pd.to_numeric(values, errors="coerce").fillna(0.0)
-        min_val = float(numeric.min())
-        max_val = float(numeric.max())
-        if math.isclose(min_val, max_val):
-            return (numeric.clip(0.0, 1.0) * 10.0).clip(0.0, 10.0)
-        return ((numeric - min_val) / (max_val - min_val) * 10.0).clip(0.0, 10.0)
+        return (numeric.clip(0.0, 1.0) * 10.0).clip(0.0, 10.0)
