@@ -3,13 +3,48 @@ import { useServerFn } from "@tanstack/react-start";
 import { setMyUserType } from "@/lib/listings.functions";
 
 const OPTIONS = [
-  { label: "Business travel", value: "business_traveller", emoji: "💼", color: "bg-slate-600 hover:bg-slate-700" },
-  { label: "Staying for long-term study", value: "student_long_stay", emoji: "🎓", color: "bg-indigo-500 hover:bg-indigo-600" },
-  { label: "Keep it simple", value: "budget_traveller", emoji: "🎒", color: "bg-emerald-500 hover:bg-emerald-600" },
-  { label: "Travel with family", value: "family_group", emoji: "👨‍👩‍👧", color: "bg-orange-500 hover:bg-orange-600" },
-  { label: "Looking for extra comfort", value: "luxury_guest", emoji: "✨", color: "bg-amber-500 hover:bg-amber-600" },
-  { label: "A trip for two", value: "couple_getaway", emoji: "💕", color: "bg-rose-500 hover:bg-rose-600" },
-  { label: "Coming with a group", value: "large_group", emoji: "🎉", color: "bg-purple-500 hover:bg-purple-600" },
+  {
+    label: "Business travel",
+    value: "business_traveller",
+    emoji: "💼",
+    color: "bg-slate-600 hover:bg-slate-700",
+  },
+  {
+    label: "Staying for long-term study",
+    value: "student_long_stay",
+    emoji: "🎓",
+    color: "bg-indigo-500 hover:bg-indigo-600",
+  },
+  {
+    label: "Keep it simple",
+    value: "budget_traveller",
+    emoji: "🎒",
+    color: "bg-emerald-500 hover:bg-emerald-600",
+  },
+  {
+    label: "Travel with family",
+    value: "family_group",
+    emoji: "👨‍👩‍👧",
+    color: "bg-orange-500 hover:bg-orange-600",
+  },
+  {
+    label: "Looking for extra comfort",
+    value: "luxury_guest",
+    emoji: "✨",
+    color: "bg-amber-500 hover:bg-amber-600",
+  },
+  {
+    label: "A trip for two",
+    value: "couple_getaway",
+    emoji: "💕",
+    color: "bg-rose-500 hover:bg-rose-600",
+  },
+  {
+    label: "Coming with a group",
+    value: "large_group",
+    emoji: "🎉",
+    color: "bg-purple-500 hover:bg-purple-600",
+  },
 ] as const;
 
 export function TravelTypeModal({ open, onDone }: { open: boolean; onDone: () => void }) {

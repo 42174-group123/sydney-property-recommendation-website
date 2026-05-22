@@ -47,7 +47,10 @@ export function RotatingPrompt() {
     <div className="w-full max-w-3xl rounded-full bg-secondary px-8 py-6 shadow-sm">
       <h2 className="text-center text-2xl font-bold text-foreground md:text-3xl">
         {text}
-        <span className="ml-0.5 inline-block w-0.5 animate-pulse bg-foreground align-middle" style={{ height: "1em" }} />
+        <span
+          className="ml-0.5 inline-block w-0.5 animate-pulse bg-foreground align-middle"
+          style={{ height: "1em" }}
+        />
       </h2>
     </div>
   );
