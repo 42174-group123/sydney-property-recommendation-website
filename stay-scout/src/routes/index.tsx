@@ -136,7 +136,6 @@ function Index() {
   const fetchFiltered = useServerFn(searchListings);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFiltersState] = useState<Filters | null>(() => readStoredFilters());
-  const effectiveFilters = isAuthenticated ? filters : null;
 
   const setActiveFilters = (next: Filters | null) => {
     setFiltersState(next);
@@ -167,20 +166,20 @@ function Index() {
   }, [isAuthenticated, hostQuery]);
 
   const query = useInfiniteQuery({
-    queryKey: ["listings", effectiveFilters, user?.id ?? null],
+    queryKey: ["listings", filters, user?.id ?? null],
     queryFn: ({ pageParam }) => {
-      if (!effectiveFilters) {
+      if (!filters) {
         return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
       }
       if (import.meta.env.VITE_ML_BACKEND_URL || import.meta.env.PROD) {
         return rankListingsFromBrowser({
-          filters: effectiveFilters,
+          filters,
           offset: pageParam,
           limit: PAGE_SIZE,
           userId: user?.id,
         });
       }
-      return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...effectiveFilters } });
+      return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } });
     },
     initialPageParam: 0,
     getNextPageParam: (last) => (last.items.length < PAGE_SIZE ? undefined : last.nextOffset),
