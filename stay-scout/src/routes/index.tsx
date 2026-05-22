@@ -142,14 +142,6 @@ function Index() {
     writeStoredFilters(next);
   };
 
-  const openFilters = () => {
-    if (!isAuthenticated) {
-      setGateOpen(true);
-      return;
-    }
-    setFiltersOpen(true);
-  };
-
   const hostQuery = useQuery({
     queryKey: ["myHost"],
     queryFn: () => fetchMyHost({}),
@@ -263,28 +255,37 @@ function Index() {
       </header>
 
       <div className="flex flex-col items-center gap-4 px-4 pb-10 pt-2">
-        <div
-          role={filtersOpen ? undefined : "button"}
-          tabIndex={filtersOpen ? -1 : 0}
-          onClick={() => {
-            if (filtersOpen) return;
-            openFilters();
-          }}
-          onKeyDown={(e) => {
-            if (filtersOpen) return;
-            if (e.key !== "Enter" && e.key !== " ") return;
-            e.preventDefault();
-            openFilters();
-          }}
-          aria-expanded={filtersOpen}
-          className={[
-            "w-full max-w-3xl overflow-hidden bg-secondary shadow-sm",
-            "transition-all duration-500 ease-in-out",
-            filtersOpen
-              ? "rounded-2xl cursor-default"
-              : "rounded-full cursor-pointer hover:scale-[1.01]",
-          ].join(" ")}
-        >
+        <div className="relative w-full max-w-3xl">
+          {!isAuthenticated && !filtersOpen ? (
+            <button
+              type="button"
+              aria-label="Log in to use filters"
+              onClick={() => setGateOpen(true)}
+              className="absolute inset-0 z-10 rounded-full"
+            />
+          ) : null}
+          <div
+            role={filtersOpen ? undefined : "button"}
+            tabIndex={filtersOpen ? -1 : 0}
+            onClick={() => {
+              if (filtersOpen) return;
+              setFiltersOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (filtersOpen) return;
+              if (e.key !== "Enter" && e.key !== " ") return;
+              e.preventDefault();
+              setFiltersOpen(true);
+            }}
+            aria-expanded={filtersOpen}
+            className={[
+              "w-full overflow-hidden bg-secondary shadow-sm",
+              "transition-all duration-500 ease-in-out",
+              filtersOpen
+                ? "rounded-2xl cursor-default"
+                : "rounded-full cursor-pointer hover:scale-[1.01]",
+            ].join(" ")}
+          >
           <div className="relative">
             <div
               className={[
@@ -312,6 +313,7 @@ function Index() {
                 onClose={() => setFiltersOpen(false)}
               />
             </div>
+          </div>
           </div>
         </div>
       </div>
