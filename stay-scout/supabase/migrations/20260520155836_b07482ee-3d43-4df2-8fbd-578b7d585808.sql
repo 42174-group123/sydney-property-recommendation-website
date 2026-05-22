@@ -1,0 +1,1 @@
+GRANT INSERT ON TABLE public.listings TO authenticated;

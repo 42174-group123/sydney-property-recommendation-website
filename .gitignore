@@ -1,0 +1,47 @@
+# macOS / editor noise
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Environment and secret files
+.env
+.env.*
+!.env.example
+
+# JavaScript generated files
+node_modules/
+dist/
+dist-ssr/
+.output/
+.vinxi/
+.nitro/
+.vercel/
+.tanstack/
+.wrangler/
+
+# Python generated files
+.venv/
+.venv*/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ML runtime artifacts
+data/
+models/
+outputs/
+_source_artifacts/
+.clearml/
+.matplotlib/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Archives extracted during local setup
+__MACOSX/

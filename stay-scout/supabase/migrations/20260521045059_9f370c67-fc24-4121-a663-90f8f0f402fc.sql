@@ -1,0 +1,1 @@
+GRANT DELETE ON TABLE public.listings TO authenticated;

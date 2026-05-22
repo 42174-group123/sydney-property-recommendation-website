@@ -1,0 +1,1 @@
+GRANT SELECT ON public.listings TO anon, authenticated;

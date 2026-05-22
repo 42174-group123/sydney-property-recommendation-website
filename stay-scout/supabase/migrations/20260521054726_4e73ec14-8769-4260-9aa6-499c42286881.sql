@@ -1,0 +1,1 @@
+ALTER TABLE public.hosts ADD COLUMN user_type text;

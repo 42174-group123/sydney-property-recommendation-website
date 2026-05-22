@@ -1,0 +1,1 @@
+ALTER TABLE public.hosts ADD COLUMN IF NOT EXISTS listing_interested bigint[] NOT NULL DEFAULT '{}'::bigint[];

@@ -1,0 +1,14 @@
+project_id = "rmonjbexchkyvkgecacn"
+
+[auth]
+site_url = "http://127.0.0.1:8080"
+additional_redirect_urls = ["http://localhost:8080"]
+
+# Uncomment after creating a local Google OAuth client and adding the values
+# to .env.local. Then restart Supabase with `supabase stop` and `supabase start`.
+#
+# [auth.external.google]
+# enabled = true
+# client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+# secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
+# skip_nonce_check = false

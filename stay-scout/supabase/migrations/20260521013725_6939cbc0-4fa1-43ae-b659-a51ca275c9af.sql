@@ -1,0 +1,1 @@
+ALTER TABLE public.hosts ADD COLUMN IF NOT EXISTS saved_listings bigint[] NOT NULL DEFAULT '{}';
