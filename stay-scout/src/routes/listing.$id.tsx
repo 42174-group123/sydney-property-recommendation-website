@@ -13,8 +13,11 @@ import {
 } from "@/lib/listings.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { LoginGateModal } from "@/components/LoginGateModal";
-import placeholderImg from "@/assets/listing-placeholder.png";
-import envelopeSent from "@/assets/envelope-sent.png";
+
+const placeholderImg =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 480'%3E%3Crect width='640' height='480' fill='%23e2e8f0'/%3E%3Cpath d='M88 384l142-162 104 118 64-72 154 116H88z' fill='%2394a3b8'/%3E%3Ccircle cx='456' cy='144' r='52' fill='%23cbd5e1'/%3E%3C/svg%3E";
+const envelopeSent =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m22 2-7 20-4-9-9-4Z'/%3E%3Cpath d='M22 2 11 13'/%3E%3C/svg%3E";
 
 export const Route = createFileRoute("/listing/$id")({
   validateSearch: (search) => z.object({ from: z.string().optional() }).parse(search),

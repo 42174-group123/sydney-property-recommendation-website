@@ -5,7 +5,9 @@ import { Trash2 } from "lucide-react";
 import { getPublishedListings, deleteMyListing } from "@/lib/listings.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { LoginGateModal } from "@/components/LoginGateModal";
-import placeholderImg from "@/assets/listing-placeholder.png";
+
+const placeholderImg =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 480'%3E%3Crect width='640' height='480' fill='%23e2e8f0'/%3E%3Cpath d='M88 384l142-162 104 118 64-72 154 116H88z' fill='%2394a3b8'/%3E%3Ccircle cx='456' cy='144' r='52' fill='%23cbd5e1'/%3E%3C/svg%3E";
 
 export const Route = createFileRoute("/published")({
   component: PublishedPage,
