@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listListings,
+  searchListings,
   getMyHost,
   logUserAction,
   type ListingCard as ListingCardType,
@@ -24,7 +25,6 @@ export const Route = createFileRoute("/")({
 });
 
 const PAGE_SIZE = 20;
-const DEFAULT_ML_BACKEND_URL = "https://stay-scout-ml-backend.onrender.com";
 const FILTER_STORAGE_KEY = "stay-scout.activeFilters";
 
 function hasAnyFilter(filters: Filters): boolean {
@@ -86,67 +86,45 @@ function normalizeRankedPage(page: {
   return { items, nextOffset: page.nextOffset ?? (page.offset ?? 0) + items.length };
 }
 
-function requestProbablyNeverReachedBackend(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    error instanceof TypeError ||
-    message.includes("Failed to fetch") ||
-    message.includes("NetworkError") ||
-    message.includes("Load failed")
-  );
-}
-
-async function rankListingsFromBrowser({
+async function rankListingsThroughServer({
+  fetchRankedListings,
   filters,
   offset,
   limit,
   userId,
 }: {
+  fetchRankedListings: ReturnType<typeof useServerFn<typeof searchListings>>;
   filters: Filters;
   offset: number;
   limit: number;
   userId: string;
 }): Promise<{ items: ListingCardType[]; nextOffset: number }> {
-  const baseUrl = import.meta.env.VITE_ML_BACKEND_URL || DEFAULT_ML_BACKEND_URL;
-  console.info("[Stay Scout] POST /rank-listings", {
-    baseUrl,
+  console.info("[Stay Scout] Server ranking request", {
     userId,
     offset,
     limit,
     filters,
   });
-  const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}/rank-listings`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
+
+  const payload = await fetchRankedListings({
+    data: {
       user_id: userId,
       offset,
       limit,
       listing_ids: null,
-      filters: {
-        min_accommodates: filters.min_accommodates,
-        min_bathrooms: filters.min_bathrooms,
-        min_bedrooms: filters.min_bedrooms,
-        min_beds: filters.min_beds,
-        min_price: filters.min_price,
-        max_price: filters.max_price,
-        min_nights: filters.min_nights,
-        instant_bookable: filters.instant_bookable,
-        neighbourhood: filters.neighbourhood,
-      },
-    }),
+      min_accommodates: filters.min_accommodates,
+      min_bathrooms: filters.min_bathrooms,
+      min_bedrooms: filters.min_bedrooms,
+      min_beds: filters.min_beds,
+      min_price: filters.min_price,
+      max_price: filters.max_price,
+      min_nights: filters.min_nights,
+      instant_bookable: filters.instant_bookable,
+      neighbourhood: filters.neighbourhood,
+    },
   });
 
-  if (!response.ok) {
-    throw new Error(`ML ranking backend returned ${response.status}: ${await response.text()}`);
-  }
-
-  const payload = (await response.json()) as {
-    items?: Array<ListingCardType & { id: unknown }>;
-    nextOffset?: number;
-  };
-  console.info("[Stay Scout] POST /rank-listings response", {
-    status: response.status,
+  console.info("[Stay Scout] Server ranking response", {
     itemCount: payload.items?.length ?? 0,
     nextOffset: payload.nextOffset,
   });
@@ -160,6 +138,7 @@ function Index() {
   const [hostOpen, setHostOpen] = useState(false);
   const queryClient = useQueryClient();
   const fetchListings = useServerFn(listListings);
+  const fetchRankedListings = useServerFn(searchListings);
   const fetchMyHost = useServerFn(getMyHost);
   const recordUserAction = useServerFn(logUserAction);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -207,9 +186,9 @@ function Index() {
         return;
       }
 
-      let keepLoading = false;
       try {
-        const page = await rankListingsFromBrowser({
+        const page = await rankListingsThroughServer({
+          fetchRankedListings,
           filters: activeFilters,
           offset,
           limit: PAGE_SIZE,
@@ -219,24 +198,15 @@ function Index() {
         setRankedNextOffset(page.nextOffset);
         setRankedHasMore(page.items.length === PAGE_SIZE);
       } catch (error) {
-        if (requestProbablyNeverReachedBackend(error)) {
-          keepLoading = true;
-          console.error(
-            "ML ranking request did not reach the backend; keeping filtered view loading.",
-            error,
-          );
-          return;
-        }
+        console.error("ML ranking request failed; no unranked fallback will be shown.", error);
         setRankingError(error instanceof Error ? error.message : "ML ranking request failed");
         setRankedHasMore(false);
         if (replace) setRankedPages([]);
       } finally {
-        if (!keepLoading) {
-          setRankedLoading(false);
-        }
+        setRankedLoading(false);
       }
     },
-    [requireLogin, resolveUserId],
+    [fetchRankedListings, requireLogin, resolveUserId],
   );
 
   const hostQuery = useQuery({
