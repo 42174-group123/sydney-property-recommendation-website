@@ -73,17 +73,37 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Lovable App" },
-      { name: "description", content: "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information." },
+      {
+        name: "description",
+        content:
+          "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information.",
+      },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information." },
+      {
+        property: "og:description",
+        content:
+          "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "Lovable App" },
-      { name: "twitter:description", content: "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/29e763d3-7347-4b0d-b645-dbc23dbfda94/id-preview-c796fddf--e2d604c7-c38a-4d92-ba0c-4b823e503a4f.lovable.app-1779282990590.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/29e763d3-7347-4b0d-b645-dbc23dbfda94/id-preview-c796fddf--e2d604c7-c38a-4d92-ba0c-4b823e503a4f.lovable.app-1779282990590.png" },
+      {
+        name: "twitter:description",
+        content:
+          "Stay Scout is a web application that helps users find properties by displaying listings and detailed property information.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/29e763d3-7347-4b0d-b645-dbc23dbfda94/id-preview-c796fddf--e2d604c7-c38a-4d92-ba0c-4b823e503a4f.lovable.app-1779282990590.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/29e763d3-7347-4b0d-b645-dbc23dbfda94/id-preview-c796fddf--e2d604c7-c38a-4d92-ba0c-4b823e503a4f.lovable.app-1779282990590.png",
+      },
     ],
     links: [
       {
