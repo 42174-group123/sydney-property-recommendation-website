@@ -126,7 +126,7 @@ async function rankListingsFromBrowser({
 
 function Index() {
   const navigate = useNavigate();
-  const { isAuthenticated, loading: authLoading, user, signOut } = useAuth();
+  const { isAuthenticated, user, signOut } = useAuth();
   const [gateOpen, setGateOpen] = useState(false);
   const [hostOpen, setHostOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -153,12 +153,6 @@ function Index() {
   const needsTravelType = isAuthenticated && hostQuery.data != null && !hostQuery.data.user_type;
 
   useEffect(() => {
-    if (authLoading || isAuthenticated || filters === null) return;
-    setFiltersState(null);
-    writeStoredFilters(null);
-  }, [authLoading, filters, isAuthenticated]);
-
-  useEffect(() => {
     if (!isAuthenticated) return;
     if (hostQuery.isLoading) return;
     if (hostQuery.data) return;
@@ -166,17 +160,14 @@ function Index() {
     return () => clearTimeout(t);
   }, [isAuthenticated, hostQuery]);
 
-  const canRunListingQuery = !authLoading && (filters === null || (isAuthenticated && !!user?.id));
-
   const query = useInfiniteQuery({
     queryKey: ["listings", filters, user?.id ?? null],
-    enabled: canRunListingQuery,
     queryFn: ({ pageParam }) => {
       if (!filters) {
         return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
       }
       if (!user?.id) {
-        throw new Error("Login is required for ML match scoring");
+        return { items: [] as ListingCardType[], nextOffset: pageParam };
       }
       return rankListingsFromBrowser({
         filters,
