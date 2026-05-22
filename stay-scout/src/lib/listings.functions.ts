@@ -6,6 +6,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 type ListingId = string;
+const DEFAULT_ML_BACKEND_URL = "https://stay-scout-ml-backend.onrender.com";
 const listingIdSchema = z
   .union([z.string().trim().regex(/^\d+$/), z.number().int().nonnegative()])
   .transform((value) => String(value));
@@ -85,7 +86,7 @@ async function rankListingsWithMl(
   const baseUrl =
     process.env.ML_BACKEND_URL ||
     process.env.VITE_ML_BACKEND_URL ||
-    (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:8090");
+    (process.env.NODE_ENV === "production" ? DEFAULT_ML_BACKEND_URL : "http://127.0.0.1:8090");
   if (!baseUrl) throw new Error("ML_BACKEND_URL is required for filtered listing search");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);

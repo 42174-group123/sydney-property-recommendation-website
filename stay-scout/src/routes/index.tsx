@@ -25,6 +25,7 @@ export const Route = createFileRoute("/")({
 });
 
 const PAGE_SIZE = 20;
+const DEFAULT_ML_BACKEND_URL = "https://stay-scout-ml-backend.onrender.com";
 const FILTER_STORAGE_KEY = "stay-scout.activeFilters";
 
 function hasAnyFilter(filters: Filters): boolean {
@@ -81,8 +82,7 @@ async function rankListingsFromBrowser({
   limit: number;
   userId?: string | null;
 }): Promise<{ items: ListingCardType[]; nextOffset: number }> {
-  const baseUrl = import.meta.env.VITE_ML_BACKEND_URL;
-  if (!baseUrl) throw new Error("VITE_ML_BACKEND_URL is not configured");
+  const baseUrl = import.meta.env.VITE_ML_BACKEND_URL || DEFAULT_ML_BACKEND_URL;
 
   const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}/rank-listings`, {
     method: "POST",
@@ -163,7 +163,7 @@ function Index() {
       if (!filters) {
         return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
       }
-      if (import.meta.env.VITE_ML_BACKEND_URL) {
+      if (import.meta.env.VITE_ML_BACKEND_URL || import.meta.env.PROD) {
         return rankListingsFromBrowser({
           filters,
           offset: pageParam,
