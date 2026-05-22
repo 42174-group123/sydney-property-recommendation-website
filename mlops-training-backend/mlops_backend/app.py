@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .config import Settings, load_settings
@@ -22,6 +23,13 @@ else:
 
 settings: Settings = load_settings(Path(__file__).resolve().parents[1])
 app = FastAPI(title="Stay Scout MLOps Training Backend")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(settings.cors_allow_origins),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 scheduler = BackgroundScheduler(timezone="UTC") if BackgroundScheduler is not None else None
 ranking_service = RankingService(settings)
 state: dict[str, Any] = {

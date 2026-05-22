@@ -73,6 +73,7 @@ class Settings:
     train_n_jobs: int
     max_table_rows: int
     page_size: int
+    cors_allow_origins: tuple[str, ...]
     workspace_dir: Path
     data_dir: Path
     outputs_dir: Path
@@ -170,6 +171,12 @@ def load_settings(workspace_dir: Path | None = None) -> Settings:
         train_n_jobs=_int_env("TRAIN_N_JOBS", 1),
         max_table_rows=_int_env("MAX_TABLE_ROWS", 100000),
         page_size=_int_env("PAGE_SIZE", 1000),
+        cors_allow_origins=tuple(
+            origin.strip()
+            for origin in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")
+            if origin.strip()
+        )
+        or ("*",),
         workspace_dir=root,
         data_dir=data_dir,
         outputs_dir=outputs_dir,

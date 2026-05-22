@@ -3,7 +3,13 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { listListings, getMyHost, logUserAction, searchListings } from "@/lib/listings.functions";
+import {
+  listListings,
+  getMyHost,
+  logUserAction,
+  searchListings,
+  type ListingCard as ListingCardType,
+} from "@/lib/listings.functions";
 import { RotatingPrompt } from "@/components/RotatingPrompt";
 import { FilterPanel, type Filters } from "@/components/FilterPanel";
 import { ListingCard } from "@/components/ListingCard";
@@ -64,6 +70,60 @@ function writeStoredFilters(filters: Filters | null) {
   window.sessionStorage.removeItem(FILTER_STORAGE_KEY);
 }
 
+async function rankListingsFromBrowser({
+  filters,
+  offset,
+  limit,
+  userId,
+}: {
+  filters: Filters;
+  offset: number;
+  limit: number;
+  userId?: string | null;
+}): Promise<{ items: ListingCardType[]; nextOffset: number }> {
+  const baseUrl = import.meta.env.VITE_ML_BACKEND_URL;
+  if (!baseUrl) throw new Error("VITE_ML_BACKEND_URL is not configured");
+
+  const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}/rank-listings`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId ?? null,
+      offset,
+      limit,
+      filters: {
+        min_accommodates: filters.min_accommodates,
+        min_bathrooms: filters.min_bathrooms,
+        min_bedrooms: filters.min_bedrooms,
+        min_beds: filters.min_beds,
+        min_price: filters.min_price,
+        max_price: filters.max_price,
+        min_nights: filters.min_nights,
+        instant_bookable: filters.instant_bookable,
+        neighbourhood: filters.neighbourhood,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`ML ranking backend returned ${response.status}: ${await response.text()}`);
+  }
+
+  const payload = (await response.json()) as {
+    items?: Array<ListingCardType & { id: unknown }>;
+    nextOffset?: number;
+  };
+  const items = (payload.items ?? []).map((item) => ({ ...item, id: String(item.id) }));
+  const unscored = items.filter(
+    (item) => typeof item.match_score !== "number" || !Number.isFinite(item.match_score),
+  );
+  if (unscored.length > 0) {
+    throw new Error(`ML ranking backend returned ${unscored.length} unscored listings`);
+  }
+
+  return { items, nextOffset: payload.nextOffset ?? offset + items.length };
+}
+
 function Index() {
   const navigate = useNavigate();
   const { isAuthenticated, user, signOut } = useAuth();
@@ -98,11 +158,21 @@ function Index() {
   }, [isAuthenticated, hostQuery]);
 
   const query = useInfiniteQuery({
-    queryKey: ["listings", filters],
-    queryFn: ({ pageParam }) =>
-      filters
-        ? fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } })
-        : fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } }),
+    queryKey: ["listings", filters, user?.id ?? null],
+    queryFn: ({ pageParam }) => {
+      if (!filters) {
+        return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
+      }
+      if (import.meta.env.VITE_ML_BACKEND_URL) {
+        return rankListingsFromBrowser({
+          filters,
+          offset: pageParam,
+          limit: PAGE_SIZE,
+          userId: user?.id,
+        });
+      }
+      return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } });
+    },
     initialPageParam: 0,
     getNextPageParam: (last) => (last.items.length < PAGE_SIZE ? undefined : last.nextOffset),
   });
