@@ -25,7 +25,13 @@ assert(packageJson.devDependencies?.nitro, "package.json must include Nitro for 
 
 assert(viteConfig.includes("nitro/vite"), "Vercel build must use the Nitro Vite plugin");
 assert(viteConfig.includes("isVercelBuild"), "Vite config must detect Vercel builds");
-assert(viteConfig.includes("cloudflare: isVercelBuild ? false : undefined"), "Vercel build must disable Cloudflare plugin");
-assert(viteConfig.includes('server: { entry: "server" }'), "Vite config must keep the SSR server entry");
+assert(
+  viteConfig.includes("cloudflare: isVercelBuild ? false : undefined"),
+  "Vercel build must disable Cloudflare plugin",
+);
+assert(
+  viteConfig.includes('server: { entry: "server" }'),
+  "Vite config must keep the SSR server entry",
+);
 
 console.log("Stay Scout smoke test passed.");

@@ -7,15 +7,70 @@ const SHARED_OPTIONS = ["Shared", "Private", "Entire"];
 const TYPE_OPTIONS = ["Apartment", "House", "Nature", "Unique", "Hotel"];
 
 const AMENITY_PRESETS = [
-  "wifi","ethernet","tv","hdtv","netflix","chromecast","apple tv","fire tv","roku",
-  "sound system","air conditioning","heating","fan","kitchen","refrigerator","fridge",
-  "oven","stove","cooktop","microwave","dishwasher","coffee maker","espresso","nespresso",
-  "kettle","toaster","washer","dryer","drying rack","shampoo","conditioner","body soap",
-  "body wash","bed linens","extra pillows","hangers","clothing storage","workspace","desk",
-  "balcony","backyard","bbq","grill","pool","hot tub","sauna","gym","exercise equipment",
-  "smoke alarm","carbon monoxide alarm","fire extinguisher","first aid kit","security camera",
-  "parking","ev charger","crib","high chair","children","elevator","private entrance",
-  "self checkin","lockbox","cleaning","building staff",
+  "wifi",
+  "ethernet",
+  "tv",
+  "hdtv",
+  "netflix",
+  "chromecast",
+  "apple tv",
+  "fire tv",
+  "roku",
+  "sound system",
+  "air conditioning",
+  "heating",
+  "fan",
+  "kitchen",
+  "refrigerator",
+  "fridge",
+  "oven",
+  "stove",
+  "cooktop",
+  "microwave",
+  "dishwasher",
+  "coffee maker",
+  "espresso",
+  "nespresso",
+  "kettle",
+  "toaster",
+  "washer",
+  "dryer",
+  "drying rack",
+  "shampoo",
+  "conditioner",
+  "body soap",
+  "body wash",
+  "bed linens",
+  "extra pillows",
+  "hangers",
+  "clothing storage",
+  "workspace",
+  "desk",
+  "balcony",
+  "backyard",
+  "bbq",
+  "grill",
+  "pool",
+  "hot tub",
+  "sauna",
+  "gym",
+  "exercise equipment",
+  "smoke alarm",
+  "carbon monoxide alarm",
+  "fire extinguisher",
+  "first aid kit",
+  "security camera",
+  "parking",
+  "ev charger",
+  "crib",
+  "high chair",
+  "children",
+  "elevator",
+  "private entrance",
+  "self checkin",
+  "lockbox",
+  "cleaning",
+  "building staff",
 ];
 
 const rainbowClass =
@@ -69,8 +124,7 @@ export function BecomeHostModal({
     setAmenities((prev) => (prev.includes(v) ? prev : [...prev, v]));
   };
 
-  const removeAmenity = (a: string) =>
-    setAmenities((prev) => prev.filter((x) => x !== a));
+  const removeAmenity = (a: string) => setAmenities((prev) => prev.filter((x) => x !== a));
 
   const submit = async () => {
     setError(null);
@@ -135,9 +189,7 @@ export function BecomeHostModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className={`text-2xl font-bold ${rainbowClass}`}>Become a host!</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Tell us about your place.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Tell us about your place.</p>
 
         <div className="mt-6 grid gap-5">
           <Field label="Listing name">
@@ -161,11 +213,7 @@ export function BecomeHostModal({
               }}
             >
               {filePreview ? (
-                <img
-                  src={filePreview}
-                  alt="preview"
-                  className="h-32 w-auto rounded object-cover"
-                />
+                <img src={filePreview} alt="preview" className="h-32 w-auto rounded object-cover" />
               ) : (
                 <span>Drag &amp; drop or click to upload an image</span>
               )}
@@ -186,7 +234,9 @@ export function BecomeHostModal({
                 onChange={(e) => setPropShared(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                {SHARED_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+                {SHARED_OPTIONS.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
               </select>
             </Field>
             <Field label="Property type">
@@ -195,7 +245,9 @@ export function BecomeHostModal({
                 onChange={(e) => setPropType(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                {TYPE_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+                {TYPE_OPTIONS.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
               </select>
             </Field>
           </div>
@@ -222,7 +274,11 @@ export function BecomeHostModal({
               </div>
             </Field>
             <NumField label="Min nights" value={minNights} onChange={setMinNights} />
-            <NumField label="Availability (days/yr)" value={availability365} onChange={setAvailability365} />
+            <NumField
+              label="Availability (days/yr)"
+              value={availability365}
+              onChange={setAvailability365}
+            />
           </div>
 
           <Field label="Neighbourhood">
@@ -260,7 +316,11 @@ export function BecomeHostModal({
                 className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="">Pick from list…</option>
-                {AMENITY_PRESETS.map((a) => <option key={a} value={a}>{a}</option>)}
+                {AMENITY_PRESETS.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
               </select>
               <input
                 className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -277,7 +337,10 @@ export function BecomeHostModal({
               />
               <button
                 type="button"
-                onClick={() => { addAmenity(customAmenity); setCustomAmenity(""); }}
+                onClick={() => {
+                  addAmenity(customAmenity);
+                  setCustomAmenity("");
+                }}
                 className="rounded-md bg-foreground px-3 py-2 text-xs font-medium text-background"
               >
                 Add
@@ -350,7 +413,7 @@ function SuccessFireworks() {
           const dist = 140 + (i % 3) * 40;
           const dx = Math.cos(angle) * dist;
           const dy = Math.sin(angle) * dist;
-          const colors = ["#ef4444","#f59e0b","#10b981","#3b82f6","#a855f7","#ec4899"];
+          const colors = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#ec4899"];
           const color = colors[i % colors.length];
           return (
             <span

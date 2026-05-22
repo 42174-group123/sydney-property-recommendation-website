@@ -50,9 +50,7 @@ export function AvatarMenu({ email }: { email?: string | null }) {
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <button
-        className="flex items-center gap-2 rounded-md bg-card px-3 py-2 text-xs font-medium shadow-sm hover:bg-muted"
-      >
+      <button className="flex items-center gap-2 rounded-md bg-card px-3 py-2 text-xs font-medium shadow-sm hover:bg-muted">
         <img
           src={avatar || defaultAvatar}
           alt="avatar"
