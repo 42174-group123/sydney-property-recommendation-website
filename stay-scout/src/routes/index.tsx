@@ -136,10 +136,19 @@ function Index() {
   const fetchFiltered = useServerFn(searchListings);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFiltersState] = useState<Filters | null>(() => readStoredFilters());
+  const effectiveFilters = isAuthenticated ? filters : null;
 
   const setActiveFilters = (next: Filters | null) => {
     setFiltersState(next);
     writeStoredFilters(next);
+  };
+
+  const openFilters = () => {
+    if (!isAuthenticated) {
+      setGateOpen(true);
+      return;
+    }
+    setFiltersOpen(true);
   };
 
   const hostQuery = useQuery({
@@ -158,20 +167,20 @@ function Index() {
   }, [isAuthenticated, hostQuery]);
 
   const query = useInfiniteQuery({
-    queryKey: ["listings", filters, user?.id ?? null],
+    queryKey: ["listings", effectiveFilters, user?.id ?? null],
     queryFn: ({ pageParam }) => {
-      if (!filters) {
+      if (!effectiveFilters) {
         return fetchListings({ data: { offset: pageParam, limit: PAGE_SIZE } });
       }
       if (import.meta.env.VITE_ML_BACKEND_URL || import.meta.env.PROD) {
         return rankListingsFromBrowser({
-          filters,
+          filters: effectiveFilters,
           offset: pageParam,
           limit: PAGE_SIZE,
           userId: user?.id,
         });
       }
-      return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...filters } });
+      return fetchFiltered({ data: { offset: pageParam, limit: PAGE_SIZE, ...effectiveFilters } });
     },
     initialPageParam: 0,
     getNextPageParam: (last) => (last.items.length < PAGE_SIZE ? undefined : last.nextOffset),
@@ -260,13 +269,13 @@ function Index() {
           tabIndex={filtersOpen ? -1 : 0}
           onClick={() => {
             if (filtersOpen) return;
-            setFiltersOpen(true);
+            openFilters();
           }}
           onKeyDown={(e) => {
             if (filtersOpen) return;
             if (e.key !== "Enter" && e.key !== " ") return;
             e.preventDefault();
-            setFiltersOpen(true);
+            openFilters();
           }}
           aria-expanded={filtersOpen}
           className={[
